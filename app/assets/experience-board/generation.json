@@ -1,0 +1,7 @@
+{
+  "generator": "Built-in image_gen",
+  "purpose": "Slate material only; all decorative drawings removed at user request.",
+  "prompts": {
+    "slate": "Use case: stylized-concept. Production asset for an Android TV chalkboard panel, not a UI mockup. Create ONLY an empty edge-to-edge rectangular blackboard surface, panoramic aspect ratio about 3.8:1, ideally 2048x544. Match the dark slate/chalkboard surface inside the bottom panel of the reference image. Very dark charcoal with a subtle cool green undertone, near #101819 with irregular broad softly blended slightly lighter #202a2b patches. Fine tactile matte slate texture and very faint cloudy wiped chalk residue, organic erased sweeping strokes across the surface. Quiet natural low-frequency texture visible at TV size. NO noisy interference pattern, NO scanlines, NO scratches, NO strong grain, NO tiling, NO obvious radial spotlight, NO gradient-only smoothness. Front-on flat seamless material photograph, uniformly in focus. No frame, no borders, no writing, no doodles, no photos, no objects, no people, no watermark. The reference is STYLE ONLY; omit every UI element and every mark/drawing/text from it."
+  }
+}

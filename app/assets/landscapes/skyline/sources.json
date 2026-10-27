@@ -1,0 +1,83 @@
+{
+  "collection": "Skyline",
+  "creator": "Basic Apple Guy",
+  "source": "https://basicappleguy.com/basicappleblog/skyline",
+  "processing": "Original Mac downloads centre-cropped to 16:9, 2560x1440 JPEG. No AI generation.",
+  "images": [
+    {
+      "id": "blue",
+      "title": "The Blue One",
+      "original_url": "https://basicappleguy.com/s/TheBlueOne_Mac.png",
+      "original_size": [
+        6016,
+        3900
+      ],
+      "asset": "blue.jpg",
+      "size": [
+        2560,
+        1440
+      ],
+      "sha256": "d601cdd4b4cf49e5cf4e020a48546b38d780b3a2e3a5ba0c5cf7027c4018aade"
+    },
+    {
+      "id": "cloudy",
+      "title": "Partly Cloudy",
+      "original_url": "https://basicappleguy.com/s/PartlyCloudy_Mac.png",
+      "original_size": [
+        6016,
+        3900
+      ],
+      "asset": "cloudy.jpg",
+      "size": [
+        2560,
+        1440
+      ],
+      "sha256": "0cddff4f81da9d096d2caa8eccd547429bd9c6a00664de3610a5a02c289960ff"
+    },
+    {
+      "id": "storm",
+      "title": "Golden Hour Storm",
+      "original_url": "https://basicappleguy.com/s/GoldenHourStorm_Mac-apgt.png",
+      "original_size": [
+        6016,
+        3900
+      ],
+      "asset": "storm.jpg",
+      "size": [
+        2560,
+        1440
+      ],
+      "sha256": "dfa7da7de9fc8077f07a001f0b2fb7415b949a99482869635b53ee3bed5eed47"
+    },
+    {
+      "id": "sunflare",
+      "title": "Sunflare",
+      "original_url": "https://basicappleguy.com/s/SunFlare_Mac.png",
+      "original_size": [
+        6016,
+        3900
+      ],
+      "asset": "sunflare.jpg",
+      "size": [
+        2560,
+        1440
+      ],
+      "sha256": "0dfe976555cbe1335b5a75977ee08b59d342397bcfffc50b767a4f8934380123"
+    },
+    {
+      "id": "twilight",
+      "title": "Deep Twilight",
+      "original_url": "https://basicappleguy.com/s/DeepTwilight_Mac.png",
+      "original_size": [
+        6016,
+        3900
+      ],
+      "asset": "twilight.jpg",
+      "size": [
+        2560,
+        1440
+      ],
+      "sha256": "d451cc6eee03fc4ac35d2e25df7c2c7b9e468a0cb6930d8034b4fc641eba4ba7"
+    }
+  ]
+}

@@ -1,0 +1,94 @@
+blueprint:
+  name: HAndroid TV · Notificación
+  description: >-
+    Envía avisos a una TV descubierta por MQTT. En la próxima versión de la app
+    los críticos siempre serán persistentes. Se descartan si la TV está
+    desconectada o con la pantalla apagada. No conserva ni reintenta mensajes.
+  domain: script
+  homeassistant:
+    min_version: 2026.10.0
+  input:
+    tv_device:
+      name: Televisor HAndroid TV
+      selector:
+        device:
+          integration: mqtt
+mode: parallel
+max: 10
+fields:
+  message:
+    name: Mensaje
+    required: true
+    selector:
+      text:
+        multiline: true
+  notification_type:
+    name: Tipo
+    default: normal
+    selector:
+      select:
+        options:
+          - normal
+          - critical
+  persistent:
+    name: Persistente
+    default: false
+    selector:
+      boolean:
+  duration:
+    name: Duración en segundos
+    default: 8
+    selector:
+      number:
+        min: 2
+        max: 120
+        mode: box
+  notification_id:
+    name: Identificador opcional (reutilizarlo actualiza el aviso)
+    selector:
+      text:
+sequence:
+  - variables:
+      tv: !input tv_device
+      identifiers: "{{ device_attr(tv, 'identifiers') or [] }}"
+      tv_identifiers: "{{ identifiers | map(attribute=1) | select('match', '^handroid_tv_') | list }}"
+      notify_entities: "{{ device_entities(tv) | select('match', '^notify\\.') | list }}"
+  - if:
+      - condition: template
+        value_template: "{{ tv_identifiers | count != 1 }}"
+    then:
+      - stop: El dispositivo seleccionado no es HAndroid TV.
+        error: true
+  - if:
+      - condition: template
+        value_template: >-
+          {{ notify_entities | count == 0 or
+             is_state(notify_entities[0], 'unavailable') }}
+    then:
+      - variables:
+          delivery:
+            status: discarded
+            reason: screen_off_or_offline
+      - stop: Aviso descartado. La TV está desconectada o apagada.
+        response_variable: delivery
+  - variables:
+      payload:
+        message: "{{ message }}"
+        notification_type: "{{ notification_type | default('normal') }}"
+        persistent: "{{ persistent | default(false) }}"
+        duration: "{{ duration | default(8) | int }}"
+        expires_at: "{{ (as_timestamp(now()) * 1000 + 10000) | int }}"
+        notification_id: "{{ notification_id | default('', true) or ('ha_' ~ now().strftime('%Y%m%d%H%M%S%f')) }}"
+  - action: mqtt.publish
+    data:
+      topic: "{{ 'handroid_tv/' ~ tv_identifiers[0][12:] ~ '/notify/set' }}"
+      qos: 0
+      retain: false
+      payload: >-
+        {{ payload | to_json }}
+  - variables:
+      delivery:
+        status: published
+        notification_id: "{{ payload.notification_id }}"
+  - stop: Publicado. La confirmación de presentación llega por el evento MQTT.
+    response_variable: delivery

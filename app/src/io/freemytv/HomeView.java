@@ -20,6 +20,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.text.Layout;
+import android.text.Html;
 import android.text.StaticLayout;
 import android.text.TextPaint;
 import android.text.TextUtils;
@@ -69,8 +70,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     // Shelf like the tvOS 27 Dock: icons in each brand's color, 48 apart, and the glass bar hugging them with 40 of
     // padding (the focused icon grows 20% without touching its edge). The icons are 16:9, the shape of the apps' TV
     // banners, so those are never stretched: up to 224 × 126, 178 × 100 with eight apps.
-    private static final float SHELF_PAD = 40, TILE_GAP = 48;
-    private static final float TILE_RADIUS = 22;
+    private static final float SHELF_PAD = 16, TILE_GAP = 12;
+    private static final float TILE_RADIUS = 32;
     // Tile focus (Apple TV style): it grows from the center and its shadow drops (it "rises" toward the viewer).
     private static final float FOCUS_GROW = 0.2f;
     // Corner capsule.
@@ -92,8 +93,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     // Light design (the L_ constants): title, tab bar, three recommendation cards and the shelf.
     // The tab bar is a 68 px capsule; the cards sit on the 5-column grid (the wide one spans 3).
     private static final float L_TITLE_BASE = 130, L_TABBAR_TOP = 158, L_TABBAR_H = 68, L_CARDS_TOP = 262, L_CARD_H = 442;
-    private static final float L_TALL_W = 320, L_CARD_GAP = 40, L_BUTTON = 68, L_BUTTON_GAP = 20, L_BUTTON_CY = 103;
-    private static final float L_PLATTER_TOP = 814, L_TILE_H = 126;
+    private static final float L_TALL_W = 320, L_CARD_GAP = 40, L_BUTTON = 56, L_BUTTON_GAP = 24, L_BUTTON_CY = 103;
+    private static final float L_PLATTER_TOP = 818, L_TILE_H = 160;
     private static final float L_DATE_BASE = 330, L_CLOCK_BASE = 540, L_WEATHER_BASE = 626, L_QUOTES_BASE = 694;
     private static final int L_INK = 0xFF1D1D1F, L_DIM = 0xFF6E6E73, L_FAINT = 0xFF8E8E93;
     private static String[] tabs;
@@ -104,7 +105,122 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private final Activity activity;
     private final Scene scene = new Scene();
     private final HomeData data;
+    private final HomeClimate homeClimate=HomeClimate.get();
+    private final HomeCalendars homeCalendars=HomeCalendars.get();
+    private final CalendarVisual calendarVisual=new CalendarVisual();
+    private final Spring agendaScroll=new Spring(0.38f,1,0);
+    private static final int Z_AGENDA=13;
+    private final Runnable calendarMonthLoad=this::loadAgendaMonth;
+    private void loadAgendaMonth(){
+        if(!running || !hasWindowFocus() || !drawerOpen || zone!=Z_AGENDA)return;
+        java.time.YearMonth month=calendarVisual.navigation.month();
+        homeCalendars.month(month,result->{calendarVisual.monthResult(month,result);drawerDirty=true;wake();spoken.focusMoved();});
+    }
+    private void requestAgendaMonth(){removeCallbacks(calendarMonthLoad);postDelayed(calendarMonthLoad,250);}
+    private final Runnable calendarListener=()->{
+        calendarVisual.update(homeCalendars.agenda); statusDirty=drawerDirty=true; wake(); this.spoken.focusMoved();
+        if(this.zone==Z_AGENDA)requestAgendaMonth();
+    };
+    private final IndoorClimateRow indoorClimateRow=new IndoorClimateRow();
+    private final Runnable climateListener=this::onClimate;
+    private final HomeControls homeControls=new HomeControls();
+    private final StudyControls studyControls=new StudyControls();
+    private final StudyControls bedroomControls=new StudyControls(true);
+    private final ApplianceControls applianceControls=new ApplianceControls();
+    private android.graphics.drawable.Drawable assistantIcon;
+    private int assistantTint;
+    private final StudyControls.Listener studyListener=new StudyControls.Listener() {
+        @Override public void changed() {
+            deviceGroupsChanged();
+        }
+        @Override public void failed() { showToast("No se pudo confirmar el apagado de todos los dispositivos del estudio. Comprueba sus estados."); }
+    };
+    private final StudyControls.Listener bedroomListener=new StudyControls.Listener() {
+        @Override public void changed() { deviceGroupsChanged(); }
+        @Override public void failed() { showToast("No se pudo confirmar el apagado de la luz del dormitorio. Comprueba su estado."); }
+    };
+    private boolean deviceGroupOn() { return studyControls.state.anyOn || bedroomControls.state.anyOn; }
+    private void deviceGroupsChanged() {
+        int tint=deviceGroupOn()?CalendarAgenda.ATTENTION:0xFFFFFFFF;
+        if(assistantIcon!=null && tint!=assistantTint) { assistantTint=tint; assistantIcon.setTint(tint); }
+        if(HomeControls.enabled()) setDrawerItems(drawerList(getContext()));
+        statusDirty=drawerDirty=true; wake(); spoken.focusMoved();
+    }
+    private boolean coverEditing;
+    private int coverDraft;
+    private final Path controlHourglass=new Path();
+    private long controlAnimationAt;
+    private final HomeControls.Listener controlsListener=new HomeControls.Listener() {
+        @Override public void changed() {
+            if(coverEditing && !homeControls.states[2].controllable) coverEditing=false;
+            drawerDirty=true; wake(); spoken.focusMoved();
+        }
+        @Override public void failed() { showToast("No se pudo confirmar la acción en Home Assistant. Comprueba el estado antes de reintentar."); }
+    };
     private final Recs recs;
+    private static final int Z_CINEMA = 6, Z_CINEMA_MOVIES = 7;
+    private static final int RECENT=8, Z_RECENT=10;
+    private static final int CONTINUING=9, Z_CONTINUING=11;
+    private static final int INTERESTS=10, Z_INTERESTS=12;
+    private final Interests interests;
+    private final InterestPanel interestPanel=new InterestPanel();
+    private int interestIndex;
+    private int interestProgramme=-1;
+    private final Runnable interestListener=this::updateInterests;
+    private static final int EVENTS=11,Z_EVENT_TABS=14,Z_EVENTS=15;
+    private static final int EXPERIENCES=12,Z_BOARD_HEADER=16,Z_BOARD=17,Z_BOARD_BLOCK=18;
+    private final ExperienceBoard experienceBoard=new ExperienceBoard(getContext());
+    private int experienceIndex;
+    private final CulturalEvents events;
+    private final CulturalPanel eventPanel=new CulturalPanel(getContext());
+    private List<CulturalData.Hit> eventResults=java.util.Collections.emptyList();
+    private int eventTab,eventHeader,eventIndex;
+    private String eventSelectedId="";
+    private final Runnable eventListener=this::updateEvents;
+    private boolean eventBrowsing;
+    private String eventExposureKey="",eventExposureFeature="";
+    private List<CulturalData.Hit> eventExposureItems=java.util.Collections.emptyList();
+    private final Runnable eventExposure=this::recordEventExposure;
+    private final JellyfinRecent recent;
+    private final JellyfinRecent continuing;
+    private static final float RECENT_OFFSET=RecentRow.ROW_GAP+InterestPanel.HEIGHT+100;
+    private final RecentRow recentRow=new RecentRow(RECENT_OFFSET);
+    private final RecentRow continueRow=new RecentRow();
+    private final Spring recentScroll=new Spring(0.38f,0.9f,0);
+    private boolean recentWasMoving;
+    private int recentIndex;
+    private int continueIndex;
+    private final Runnable recentListener=this::updateRecent;
+    private final Runnable continueListener=this::updateContinuing;
+    private final Cinema cinema;
+    private final CinemaHero cinemaHero = new CinemaHero();
+    private int cinemaIndex, cinemaButton = 1;
+    private List<Cinema.Movie> cinemaOrder=java.util.Collections.emptyList();
+    private Cinema.Movie cinemaShownMovie;
+    private Cinema.Movie cinemaRequestedMovie;
+    private int cinemaShownIndex;
+    private Paint cinemaDatePaint, cinemaClockPaint;
+    private long cinemaRotatedAt, cinemaInputAt;
+    private final Runnable cinemaListener = this::updateCinema;
+    private final Runnable cinemaTick = new Runnable() {
+        @Override public void run() {
+            if (!running || !Cinema.enabled()) return;
+            cinema.refresh();
+            if (updateClock()) { statusDirty=true; wake(); }
+            Cinema.Movie movie = cinemaMovie();
+            if (cinemaRequestedMovie != null) cinema.prepare(cinemaRequestedMovie);
+            long now = SystemClock.uptimeMillis();
+            if (cinema.movies.size() > 1 && (zone == Z_SHELF || zone == Z_CINEMA_MOVIES) && !sheetOpen && !drawerOpen
+                    && cinemaRequestedMovie==cinemaShownMovie
+                    && !cinema.panelOpen && !talkBack() && now - cinemaInputAt >= 10_000 && now - cinemaRotatedAt >= 10_000) {
+                int next = (cinemaIndex + 1) % cinema.movies.size();
+                cinemaIndex = next;
+                cinemaRotatedAt = now;
+                updateCinema();
+            }
+            handler.postDelayed(this, 1000);
+        }
+    };
     private final Click click;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final SharedPreferences ui;
@@ -116,10 +232,33 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         @Override public int focused() { return a11yFocused(); }
         @Override public void focus(int id) { a11yFocus(id); }
         @Override public void click(int id) { activate(); }
-        @Override public boolean clickable(int id) { return (id - 1) / 1000 != WIDGETS; }
+        @Override public int progress(int id) {
+            return id==a11yId(Z_DRAWER,2) && HomeControls.enabled() && homeControls.ready(2)?
+                    (coverEditing?coverDraft:homeControls.states[2].position):-1;
+        }
+        @Override public boolean setProgress(int id,int value) {
+            if(progress(id)<0 || value<0 || value>100) return false;
+            a11yFocus(id); coverEditing=true; coverDraft=value;
+            drawerDirty=true; wake(); spoken.focusMoved(); return true;
+        }
+        @Override public boolean clickable(int id) {
+            int group=(id-1)/1000, index=(id-1)%1000;
+            if (group==Z_CINEMA) return index<=cinemaHero.lastButton() && cinemaHero.enabled(cinemaMovie(),index);
+            if(group==Z_DRAWER && HomeControls.enabled()) {
+                int kind=controlKind(index);
+                return kind>=5?false:kind>=3?groupControls(kind).ready():kind>=0 && homeControls.ready(kind);
+            }
+            if(group==Z_INTERESTS) return index<interests.items.size() && interests.items.get(index).ready();
+            return group != WIDGETS && group!=Z_AGENDA;
+        }
     });
     private final RectF a11yRect = new RectF();
     private final Layer sky, heroLayer, status, platter, tiles, drawerLayer, sheetLayer, toastLayer;
+    private final Layer recentLayer;
+    private final Layer continueLayer;
+    private final Layer interestLayer;
+    private final Layer eventLayer;
+    private final Layer experienceLayer;
     private int zone = Z_SHELF;
 
     // Night look (like Apple's "Automatic" appearance): darker from sunset to sunrise, with a 2 s transition.
@@ -141,7 +280,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private final Spring[] cardFocus = new Spring[3];
     private final RectF[] cardRects = new RectF[3];
     private final List<HomeApps.Item> lightButtons = new ArrayList<>();
-    private Paint lTitle, lTab, lTabOn, lCardTitle, lCardMeta, lQuote, lTip, lDate, lClock, lWeather, lClockQuote;
+    private Paint lTitle, lTab, lTabOn, lCardTitle, lCardMeta, lQuote, lDate, lClock, lWeather, lClockQuote;
     private Shader lightGradient;
 
     // Shelf
@@ -194,6 +333,10 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private final Spring heroFocus = new Spring(0.28f, 0.85f, 0);
     private final RectF heroButton = new RectF();
     private Backdrop bgFrom, bgTo;     // null = gradient (no photo)
+    private Backdrop homeBackdrop,drawerBackdrop;
+    private String drawerSkyPhase="";
+    private boolean drawerSkyLoading;
+    private long drawerSkyRetryAt;
     private final int[] frostMix = new int[Backdrop.FW * Backdrop.FH];
 
     // Bottom drawer
@@ -201,9 +344,15 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private int drawerInputs;          // how many leading items are inputs (the rest are shortcuts)
     private Spring[] drawerFocus = new Spring[0];
     private RectF[] drawerRects = new RectF[0];
+    private final Spring controlFocusX=new Spring(0.32f,1,0), controlFocusY=new Spring(0.32f,1,0);
+    private final Spring controlFocusW=new Spring(0.32f,1,0), controlFocusH=new Spring(0.32f,1,0);
+    private final Spring controlFocusAlpha=new Spring(0.2f,1,0);
+    private final RectF controlFocusRect=new RectF();
+    private boolean controlFocusPlaced;
     private final RectF weatherCard = new RectF(), quotesCard = new RectF();
     private final Spring drawer = new Spring(0.46f, 0.92f, 0);
     private boolean drawerOpen;
+    private int drawerReturnZone=Z_SHELF;
     private int drawerIndex;
 
     // "All Apps" sheet
@@ -254,6 +403,14 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private final Paint veil = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint tileFill = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint glassFocusPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final LinearGradient glassFocusGradient = new LinearGradient(0,0,0,1,
+            new int[]{0x40FFFFFF,0x18FFFFFF,0x08FFFFFF},new float[]{0,0.5f,1},Shader.TileMode.CLAMP);
+    private final Matrix glassFocusMatrix = new Matrix();
+    private final LinearGradient controlGlassGradient = new LinearGradient(0,0,0,1,
+            new int[]{0xADFFFFFF,0xA6FFFFFF,0x9EFFFFFF},new float[]{0,0.5f,1},Shader.TileMode.CLAMP);
+    private final Matrix controlGlassMatrix = new Matrix();
+    private Paint shelfName;
     private final Path clip = new Path();
     private final RectF tmp = new RectF(), cell = new RectF(), screen = new RectF();
     private final TextPaint fitPaint = new TextPaint();
@@ -308,6 +465,11 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 case STATUS: drawLightButtons(c); break;
                 case PLATTER: drawPlatter(c); break;
                 case TILES: drawTiles(c); break;
+                case RECENT: recentRow.draw(c,!sheetOpen && zone==Z_RECENT); break;
+                case CONTINUING: continueRow.draw(c,!sheetOpen && zone==Z_CONTINUING); break;
+                case INTERESTS: interestPanel.draw(c); break;
+                case EVENTS: eventPanel.draw(c); break;
+                case EXPERIENCES: experienceBoard.draw(c); break;
                 case DRAWER: drawDrawer(c); break;
                 case SHEET: drawSheet(c); break;
                 default: drawToast(c); break;
@@ -334,10 +496,14 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             if (!running) return;
             wake();
             data.refreshIfStale();
-            recs.refreshIfStale();
+            recent.refresh();
+            continuing.refresh();
+            events.clockChanged();
+            if (!Cinema.enabled()) recs.refreshIfStale();
             checkNotices();
             updatePalette();
             checkNight(true);
+            prepareDrawerSky();
             updatePicks();      // three new ones every hour
             handler.postDelayed(this, 15_000);
         }
@@ -348,7 +514,14 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         activity = a;
         data = HomeData.get(a);
         recs = Recs.get(a);
+        cinema = Cinema.get(a);
+        recent = JellyfinRecent.get(a);
+        continuing = JellyfinRecent.getContinue(a);
+        interests=Interests.get(a);
+        events=CulturalEvents.get(a);
+        if (Cinema.enabled()) zone=Z_CINEMA_MOVIES;
         click = new Click(a);
+        assistantIcon=a.getDrawable(R.drawable.handroid_icon).mutate();
         ui = a.getSharedPreferences("home-ui", Context.MODE_PRIVATE);
         tvInputs = (TvInputManager) a.getSystemService(Context.TV_INPUT_SERVICE);
         setFocusable(true);
@@ -357,6 +530,11 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         status = new Layer(a, STATUS);
         platter = new Layer(a, PLATTER);
         tiles = new Layer(a, TILES);
+        recentLayer = new Layer(a, RECENT);
+        continueLayer = new Layer(a, CONTINUING);
+        interestLayer = new Layer(a, INTERESTS);
+        eventLayer = new Layer(a, EVENTS);
+        experienceLayer = new Layer(a, EXPERIENCES);
         drawerLayer = new Layer(a, DRAWER);
         sheetLayer = new Layer(a, SHEET);
         toastLayer = new Layer(a, TOAST);
@@ -364,8 +542,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         // Not on Android 8 to 11: on older GPUs (a Mi Box 3's Mali-450) redrawing and compositing a big layer on every
         // frame cost more than drawing straight to the screen (measured: focus on the picks 33 → 12 ms a frame, the
         // drawer 19 → 17 ms).
-        for (View v : new View[] {heroLayer, status, platter, tiles, drawerLayer, sheetLayer}) v.setLayerType(Ui.LEGACY ? LAYER_TYPE_NONE : LAYER_TYPE_HARDWARE, null);
-        for (View v : new View[] {sky, heroLayer, status, platter, tiles, drawerLayer, sheetLayer, toastLayer}) {
+        for (View v : new View[] {heroLayer, status, platter, tiles, recentLayer, continueLayer, interestLayer, eventLayer, experienceLayer, drawerLayer, sheetLayer}) v.setLayerType(Ui.LEGACY ? LAYER_TYPE_NONE : LAYER_TYPE_HARDWARE, null);
+        for (View v : new View[] {sky, heroLayer, status, platter, tiles, recentLayer, continueLayer, interestLayer, eventLayer, experienceLayer, drawerLayer, sheetLayer, toastLayer}) {
             v.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);   // TalkBack reads the items (Spoken)
             addView(v);
         }
@@ -397,13 +575,33 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         if (running) return;
         running = true;
         checkNight(false);
+        prepareDrawerSky();
         resumedAt = SystemClock.uptimeMillis();
         lastNanos = 0;
         lastStep = 0;
         data.addListener(this);
+        homeClimate.addListener(climateListener);
+        homeCalendars.addListener(calendarListener);
+        if(HomeControls.enabled()) { studyControls.start(studyListener); bedroomControls.start(bedroomListener); }
+        if(drawerOpen && HomeControls.enabled()) {homeControls.start(controlsListener);applianceControls.start(this::deviceGroupsChanged);}
         recs.addListener(this);
+        recent.addListener(recentListener);
+        ContinuePlayback.get().cancel();
+        continuing.addListener(continueListener);
+        interests.addListener(interestListener);
+        events.addListener(eventListener);
+        continuing.refreshProgress();
+        recent.refresh();
+        updateRecent();
+        updateContinuing();
+        if (Cinema.enabled()) {
+            cinema.addListener(cinemaListener);
+            cinema.refresh();
+            cinemaRotatedAt = cinemaInputAt = SystemClock.uptimeMillis();
+            handler.postDelayed(cinemaTick, 1000);
+        }
         data.refreshIfStale();
-        recs.refreshIfStale();
+        if (!Cinema.enabled()) recs.refreshIfStale();
         if (tvInputs != null) tvInputs.registerCallback(inputCallback, handler);
         handler.postDelayed(tick, 15_000);
         checkNotices();
@@ -422,13 +620,26 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     void pause() {
         if (!running) return;
         running = false;
+        experienceBoard.photos.stop();
+        eventBrowsing=false;handler.removeCallbacks(eventExposure);eventExposureKey="";eventExposureItems=java.util.Collections.emptyList();
         cancelReorder(true);
         handler.removeCallbacks(holdStart);
         okHeld = holdArmed = false;
         Choreographer.getInstance().removeFrameCallback(this);
         handler.removeCallbacks(tick);
+        handler.removeCallbacks(cinemaTick);
+        cinema.removeListener(cinemaListener);
+        recent.removeListener(recentListener);
+        continuing.removeListener(continueListener);
+        interests.removeListener(interestListener);
+        events.removeListener(eventListener);
         handler.removeCallbacks(reloadSoon);
         data.removeListener(this);
+        homeClimate.removeListener(climateListener);
+        homeCalendars.removeListener(calendarListener);
+        studyControls.stop();
+        bedroomControls.stop();
+        homeControls.stop(); applianceControls.stop(); coverEditing=false;
         recs.removeListener(this);
         if (tvInputs != null) tvInputs.unregisterCallback(inputCallback);
     }
@@ -436,16 +647,21 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     void destroy() {
         pause();
         click.release();
+        experienceBoard.photos.close();
     }
 
     /** Starting state (Home pressed while the home screen is showing): first app focused, drawer and sheet closed. */
     void reset(boolean animated) {
+        ContinuePlayback.get().cancel();
         wake();
         cancelReorder(!animated);
-        zone = Z_SHELF;
+        zone = Cinema.enabled() ? Z_CINEMA_MOVIES : Z_SHELF;
+        cinemaInputAt = SystemClock.uptimeMillis();
         shelfIndex = 0;
         sheetOpen = false;
         drawerOpen = false;
+        transitionBackdrop(homeBackdrop);
+        homeControls.stop(); applianceControls.stop(); coverEditing=false;
         if (animated) {
             sheet.target = 0;
             drawer.target = 0;
@@ -462,12 +678,13 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         motionDirty = true;
     }
 
-    /** The three corner buttons, with their names in the current language. */
+    /** Home Assistant sits immediately left of Settings; indoor readings precede both. */
     private void makeLightButtons() {
         lightButtons.clear();
-        lightButtons.add(HomeApps.action(HomeApps.LIVE_TV, "live", Ui.tr("light|Live TV"), "live_tv"));
-        lightButtons.add(HomeApps.action(HomeApps.INPUTS, "inputs", Ui.tr("HDMI Inputs"), "hdmi"));
+        if(HomeControls.enabled()) lightButtons.add(HomeApps.action(HomeApps.HOME_ASSISTANT,"home_assistant","Home Assistant","home"));
+        lightButtons.add(HomeApps.action(HomeApps.TOOLS,"tools",Ui.tr("Tools"),"tools"));
         lightButtons.add(HomeApps.action(HomeApps.SETTINGS, "settings", Ui.tr("light|Settings"), "settings"));
+        if(topIndex>=3) topIndex=Math.min(2+lightButtons.size(),topIndex);
     }
 
     /** The tab names, made again only when the language changes (they are drawn on every frame). */
@@ -483,9 +700,16 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         wake();
         updatePalette();
         checkNight(true);
+        prepareDrawerSky();
         layoutStatus();
         heroDirty = statusDirty = drawerDirty = true;
         platter.invalidate();
+    }
+
+    private void onClimate() {
+        statusDirty=true;
+        wake();
+        status.invalidate();
     }
 
     @Override public void onRecs() {
@@ -494,7 +718,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     }
 
     private void invalidateAll() {
-        for (View v : new View[] {sky, heroLayer, status, platter, tiles, drawerLayer}) v.invalidate();
+        for (View v : new View[] {sky, heroLayer, status, platter, tiles, recentLayer, continueLayer, interestLayer, eventLayer, experienceLayer, drawerLayer}) v.invalidate();
     }
 
     // MARK: - Size and layers
@@ -504,12 +728,18 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         float kk = width / 1920f;
         measure(sky, width, height);
         measure(heroLayer, width, Math.round(790 * kk));
-        measure(status, Math.round(1160 * kk), Math.round(240 * kk));
+        // Cinema draws the clock on the left and the shortcuts on the right of this layer.
+        measure(status, Cinema.enabled()?width:Math.round(1160 * kk), Math.round(240 * kk));
         // Sized to what they draw (the glass and its shadow; the grown tiles and their shadows): smaller layers are
         // cheaper for the GPU to composite on every frame of the drawer animation.
         measure(platter, width, Math.round(320 * kk));
-        measure(tiles, width, Math.round(270 * kk));
-        measure(drawerLayer, width, Math.round(600 * kk));
+        measure(tiles, width, Math.round(300 * kk));
+        measure(recentLayer, width, Math.round(420 * kk));
+        measure(continueLayer, width, Math.round(420 * kk));
+        measure(interestLayer,width,Math.round(460*kk));
+        measure(eventLayer,width,Math.round(570*kk));
+        measure(experienceLayer,width,Math.round((ExperienceBoard.HEIGHT+60)*kk));
+        measure(drawerLayer, width, Math.round((HomeControls.enabled()?720:600) * kk));
         measure(sheetLayer, width, height);
         measure(toastLayer, Math.round(1000 * kk), Math.round(220 * kk));
         setMeasuredDimension(width, height);
@@ -526,7 +756,12 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         place(heroLayer, 0, 0);
         place(status, width - status.getMeasuredWidth(), 0);
         place(platter, 0, Math.round(750 * kk));
-        place(tiles, 0, Math.round(790 * kk));
+        place(tiles, 0, Math.round(760 * kk));
+        place(recentLayer, 0, Math.round((1040+RECENT_OFFSET) * kk));
+        place(continueLayer, 0, Math.round(1040 * kk));
+        place(interestLayer,0,Math.round((InterestPanel.TOP-80)*kk));
+        place(eventLayer,0,Math.round((CulturalPanel.TOP-60)*kk));
+        place(experienceLayer,0,Math.round((experienceBoard.top()-60)*kk));
         place(drawerLayer, 0, Math.round(470 * kk));
         sheetLayer.layout(0, 0, width, height);
         sheetLayer.setPivotX(width / 2f);
@@ -542,6 +777,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         w = width;
         h = height;
         k = w / 1920f;
+        calendarVisual.homeSize(k,900*k);
         screen.set(0, 0, w, h);
         scene.setSize(w, h);
         makePaints();
@@ -552,6 +788,11 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         layoutStatus();
         layoutDrawer();
         layoutLight();
+        updateRecent();
+        updateContinuing();
+        updateInterests();
+        updateEvents();
+        updateExperiences();
         hero = null;
         heroFrom = null;
         updatePicks();
@@ -561,6 +802,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     private void makePaints() {
         labelPaint = Ui.text(Ui.medium, 25 * k, 0xC7FFFFFF);
+        shelfName = Ui.text(Ui.regular, 28 * k, 0xFFFFFFFF);
+        shelfName.setTextAlign(Paint.Align.CENTER);
         labelPaint.setLetterSpacing(0.1f);
         titlePaint = new TextPaint(Ui.text(Ui.displayMedium, 76 * k, 0xFFFFFFFF));
         titlePaint.setLetterSpacing(0.005f);
@@ -577,13 +820,18 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         lCardTitle.setLetterSpacing(0.012f);
         lCardMeta = Ui.text(Ui.medium, 25 * k, L_DIM);
         lQuote = Ui.numbers(Ui.regular, 21 * k, L_FAINT);
-        lTip = Ui.text(Ui.semibold, 25 * k, L_INK);
-        lTip.setTextAlign(Paint.Align.CENTER);
         lDate = Ui.text(Ui.semibold, 34 * k, L_DIM);
         lClock = Ui.numbers(Ui.light, 200 * k, L_INK);
         lClock.setLetterSpacing(-0.01f);
         lWeather = Ui.text(Ui.medium, 34 * k, L_DIM);
         lClockQuote = Ui.numbers(Ui.medium, 28 * k, L_DIM);
+        cinemaDatePaint = Ui.text(Ui.medium,24*k,0xF2FFFFFF);
+        indoorClimateRow.size(k);
+        cinemaDatePaint.setTextAlign(Paint.Align.LEFT);
+        cinemaDatePaint.setShadowLayer(8*k,0,1*k,0xBB000000);
+        cinemaClockPaint = Ui.numbers(Ui.medium,44*k,0xFFFFFFFF);
+        cinemaClockPaint.setTextAlign(Paint.Align.LEFT);
+        cinemaClockPaint.setShadowLayer(8*k,0,1*k,0xBB000000);
         lightGradient = null;
         buttonPaint = Ui.text(Ui.semibold, 29 * k, INK);
         capsuleText = Ui.numbers(Ui.medium, 29 * k, 0xF2FFFFFF);
@@ -643,15 +891,23 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         if (topMoving) status.invalidate();
         heroMoving |= topMoving | cardsMoving;
         boolean drawerItemsMoving = step(drawerFocus, dt);
+        drawerItemsMoving |= controlFocusX.step(dt) | controlFocusY.step(dt) | controlFocusW.step(dt)
+                | controlFocusH.step(dt) | controlFocusAlpha.step(dt);
         boolean gridMoving = step(gridFocus, dt) | scroll.step(dt);
-        boolean drawerMoving = drawer.step(dt);
+        boolean drawerMoving = drawer.step(dt) | agendaScroll.step(dt);
+        boolean recentMoving = recentScroll.step(dt);
+        boolean recentFocusMoving=recentRow.step(dt,!sheetOpen && zone==Z_RECENT);
+        boolean continueFocusMoving=continueRow.step(dt,!sheetOpen && zone==Z_CONTINUING);
+        boolean interestFocusMoving=interestPanel.step(dt,!sheetOpen && zone==Z_INTERESTS);
+        boolean eventFocusMoving=eventPanel.step(dt,!sheetOpen && zone==Z_EVENT_TABS,!sheetOpen && zone==Z_EVENTS);
+        boolean boardMoving=experienceBoard.step(dt,!sheetOpen && zone==Z_BOARD_HEADER,!sheetOpen && zone==Z_BOARD,!sheetOpen && zone==Z_BOARD_BLOCK,experienceIndex);
         boolean sheetMoving = sheet.step(dt);
         boolean toastFading = tickToast(up);
         boolean heroFading = tickHeroFade(up);
         boolean bgFading = tickBackgroundFade(up);
         boolean nightMoving = tickNight(up);
 
-        if (drawerMoving || sheetMoving || motionDirty) updateMotion();
+        if (drawerMoving || recentMoving || sheetMoving || motionDirty) updateMotion();
         // Opening and closing the drawer only moves the cached layers: redrawing the glass on every frame made the TV
         // drop frames (measured: ~50 ms of GPU per frame). The app tiles have no glass; the top buttons fade out as
         // they rise; the drawer is drawn resting in place; the glass shelf is redrawn once the drawer stops, so the
@@ -659,13 +915,24 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         if (tilesMoving || tilesDirty) tiles.invalidate();
         if (statusMoving || statusDirty || bgFading) status.invalidate();
         if (heroMoving || heroDirty || heroFading) heroLayer.invalidate();
-        if (drawerItemsMoving || drawerDirty || bgFading) drawerLayer.invalidate();
+        boolean controlAnimating=drawerOpen && (homeControls.pending>=0 || studyControls.pending || bedroomControls.pending) && up-controlAnimationAt>=33;
+        if(controlAnimating) controlAnimationAt=up;
+        if (drawerItemsMoving || drawerDirty || bgFading || controlAnimating) drawerLayer.invalidate();
+        if(recentFocusMoving) recentLayer.invalidate();
+        if(continueFocusMoving) continueLayer.invalidate();
+        if(interestFocusMoving) interestLayer.invalidate();
+        if(eventFocusMoving) eventLayer.invalidate();
+        if(boardMoving)experienceLayer.invalidate();
         if (gridMoving || gridDirty) sheetLayer.invalidate();
-        if (drawerMoving || bgFading) sky.invalidate();
-        if (bgFading || (drawerWasMoving && !drawerMoving)) platter.invalidate();
+        if (drawerMoving || bgFading || recentMoving) sky.invalidate();
+        if (bgFading || (drawerWasMoving && !drawerMoving) || (recentWasMoving && !recentMoving)) platter.invalidate();
         drawerWasMoving = drawerMoving;
+        if(recentWasMoving && !recentMoving)updateEventExposure();
+        recentWasMoving = recentMoving;
         tilesDirty = statusDirty = heroDirty = drawerDirty = gridDirty = motionDirty = false;
         if (updateClock()) {
+            updateEvents();
+            updateExperiences();
             layoutStatus();
             status.invalidate();
             if (hero != null && hero.clock) {
@@ -677,7 +944,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
         // Busy: something is moving, or the sheet or the drawer is open.
         boolean busy = tilesMoving || statusMoving || heroMoving || drawerItemsMoving || gridMoving || drawerMoving
-                || sheetMoving || toastFading || heroFading || bgFading || nightMoving || sheetOpen || sheet.value > 0.001f
+                || recentMoving || recentFocusMoving || continueFocusMoving || interestFocusMoving || eventFocusMoving || boardMoving || sheetMoving || toastFading || heroFading || bgFading || nightMoving || sheetOpen || sheet.value > 0.001f
                 || drawerOpen || drawer.value > 0.001f || toast != null || !toasts.isEmpty();
         idle = !busy;
         if (busy) Choreographer.getInstance().postFrameCallback(this);
@@ -703,13 +970,22 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         float d = drawer.value, dc = Ui.clamp(d), s = Ui.clamp(sheet.value);
         float home = 1 - s, top = home * (1 - smoothstep(0, 0.32f, dc));
         float shift = SHIFT * k;
-        float lift = -d * shift;
-        show(heroLayer, top, lift);
-        show(status, top, lift);
-        show(platter, home, lift);
-        show(tiles, home, lift);
+        float position=Math.max(0,Math.min(5,recentScroll.value));
+        float recentLift=(Math.min(1,position)*500+Ui.clamp(position-1)*RecentRow.ROW_GAP
+                +Ui.clamp(position-2)*(RECENT_OFFSET-RecentRow.ROW_GAP)+Ui.clamp(position-3)*CulturalPanel.GAP+Math.max(0,position-4)*experienceBoard.scrollGap())*k;
+        float lift = -d * shift-recentLift;
+        show(heroLayer, top*(1-Ui.clamp(recentScroll.value)), lift);
+        show(status, top*(1-Ui.clamp(position)), -d*shift);
+        float dockAlpha=home*(1-Ui.clamp(position-1))*(1-Ui.clamp(agendaScroll.value));
+        show(platter, dockAlpha, lift);
+        show(tiles, dockAlpha, lift);
+        show(recentLayer,JellyfinRecent.enabled()?home*(1-dc):0,-recentLift);
+        show(continueLayer,JellyfinRecent.enabled()?home*(1-dc):0,-recentLift);
+        show(interestLayer,home*(1-dc),-recentLift);
+        show(eventLayer,home*(1-dc),-recentLift);
+        show(experienceLayer,home*(1-dc),-recentLift);
         float da = home * smoothstep(0.1f, 0.6f, dc);
-        drawerLayer.setTranslationY((1 - d) * shift);
+        drawerLayer.setTranslationY((1 - d) * shift-agendaScroll.value*230*k);
         drawerLayer.setAlpha(da);
         drawerLayer.setVisibility(da > 0.002f ? VISIBLE : INVISIBLE);
         sheetLayer.setVisibility(s > 0.001f || sheetOpen ? VISIBLE : INVISIBLE);
@@ -750,7 +1026,130 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     /** This hour's picks: the cards and the background image (called when Recs notifies and every 15 s). */
     private void updatePicks() {
         if (labelPaint == null) return;
+        if (Cinema.enabled()) { updateCinema(); return; }
         updateCards();
+    }
+
+    private Cinema.Movie cinemaMovie() {
+        return cinemaShownMovie;
+    }
+    private Cinema.Movie cinemaSelectedMovie() {
+        return cinema.movies.isEmpty() ? null : cinema.movies.get(Math.min(cinemaIndex, cinema.movies.size()-1));
+    }
+
+    private void updateRecent() {
+        if(labelPaint==null) return;
+        recentIndex=Math.max(0,Math.min(recentIndex,RecentRow.visibleCount(recent.items.size())-1));
+        recentRow.update(recent,k,recentIndex);
+        if(JellyfinRecent.enabled()) recent.prepareImages(recentRow.first(),RecentRow.VISIBLE);
+        recentLayer.invalidate();
+        wake();
+    }
+    private void updateContinuing() {
+        if(labelPaint==null) return;
+        continueIndex=Math.max(0,Math.min(continueIndex,RecentRow.visibleCount(continuing.items.size())-1));
+        continueRow.update(continuing,k,continueIndex);
+        if(JellyfinRecent.enabled()) continuing.prepareImages(continueRow.first(),RecentRow.VISIBLE);
+        continueLayer.invalidate(); wake();
+    }
+
+    private void updateInterests() {
+        if(labelPaint==null) return;
+        if(zone!=Z_INTERESTS) interestIndex=0;
+        if(zone==Z_INTERESTS && interestProgramme>=0) for(int i=0;i<interests.items.size();i++)
+            if(interests.items.get(i).programme==interestProgramme) { interestIndex=i; break; }
+        interestIndex=Math.max(0,Math.min(interestIndex,interests.items.size()-1));
+        interestProgramme=interests.items.get(interestIndex).programme;
+        interestPanel.update(interests,k,interestIndex);
+        interests.prepareImages(); interestLayer.invalidate(); wake(); spoken.focusMoved();
+    }
+
+    private void updateEvents() {
+        if(events==null || labelPaint==null) return;
+        boolean browsing=running && !drawerOpen && !sheetOpen && (zone==Z_EVENT_TABS || zone==Z_EVENTS);
+        if(browsing && !eventBrowsing && events.beginVisit()){eventIndex=0;eventSelectedId="";}
+        eventBrowsing=browsing;
+        List<CulturalData.Hit> next=events.results(eventTab);
+        if(next.isEmpty() && events.planning(eventTab)) {
+            eventResults=next;eventPanel.update(events,next,k,0,eventTab,eventHeader);updateEventExposure();eventLayer.invalidate();wake();return;
+        }
+        if(next!=eventResults) {
+            int old=eventIndex; eventIndex=0;
+            for(int i=0;i<next.size();i++) if(next.get(i).event.id.equals(eventSelectedId)) { eventIndex=i; break; }
+            if(eventSelectedId.isEmpty())eventIndex=Math.min(old,Math.max(0,next.size()-1));
+            eventResults=next;
+        }
+        eventIndex=Math.max(0,Math.min(eventIndex,Math.max(0,eventResults.size()-1)));
+        eventSelectedId=eventResults.isEmpty()?"":eventResults.get(eventIndex).event.id;
+        if(eventResults.isEmpty() && zone==Z_EVENTS)zone=Z_EVENT_TABS;
+        eventPanel.update(events,eventResults,k,eventIndex,eventTab,eventHeader);
+        if(zone==Z_EVENTS || zone==Z_EVENT_TABS) events.prepare(eventPanel.visible(eventResults),0,CulturalPanel.VISIBLE);
+        updateEventExposure();
+        eventLayer.invalidate(); wake(); spoken.focusMoved();
+    }
+    private boolean eventExposureVisible() {
+        return running && hasWindowFocus() && getWindowVisibility()==View.VISIBLE && !drawerOpen && !sheetOpen &&
+                (zone==Z_EVENT_TABS || zone==Z_EVENTS) && recentScroll.value>=3.95f;
+    }
+    private void updateEventExposure() {
+        if(events==null || !eventExposureVisible()){handler.removeCallbacks(eventExposure);eventExposureKey="";eventExposureItems=java.util.Collections.emptyList();return;}
+        List<CulturalData.Hit> visible=eventPanel.visible(eventResults);StringBuilder key=new StringBuilder().append(eventTab);
+        for(CulturalData.Hit hit:visible)key.append('|').append(hit.event.id);
+        String next=key.toString();if(next.equals(eventExposureKey))return;
+        handler.removeCallbacks(eventExposure);eventExposureKey=next;eventExposureItems=visible;
+        eventExposureFeature=!visible.isEmpty() && eventPanel.featured(0)?visible.get(0).event.id:"";
+        if(!visible.isEmpty())handler.postDelayed(eventExposure,2000);
+    }
+    private void recordEventExposure() {if(eventExposureVisible())events.recordVisible(eventExposureItems,eventExposureFeature);}
+    @Override public void onWindowFocusChanged(boolean focused) {super.onWindowFocusChanged(focused);updateEventExposure();updateExperiences();}
+
+    private void updateCinema() {
+        if (labelPaint == null || !Cinema.enabled()) return;
+        if(cinemaOrder!=cinema.movies) {
+            Cinema.Movie wanted=cinemaRequestedMovie!=null?cinemaRequestedMovie:cinemaShownMovie;
+            if(wanted!=null) for(int i=0;i<cinema.movies.size();i++)
+                if(cinema.movies.get(i).id==wanted.id) { cinemaIndex=i; break; }
+            cinemaOrder=cinema.movies;
+        }
+        cinemaIndex = Math.min(cinemaIndex, Math.max(0,cinema.movies.size()-1));
+        Cinema.Movie movie = cinemaSelectedMovie();
+        cinemaRequestedMovie=movie;
+        int count=cinema.movies.size();
+        Cinema.Movie previous=count>1?cinema.movies.get((cinemaIndex+count-1)%count):null;
+        Cinema.Movie next=count>1?cinema.movies.get((cinemaIndex+1)%count):null;
+        cinema.focus(movie,previous,next);
+        if (movie != null) {
+            Backdrop b = cinema.image(movie);
+            cinema.prepare(movie);
+            if(b==null) {
+                // Keep the complete previous slide (including its button actions) until the new photo is rendered.
+                if(cinemaShownMovie==null) cinemaHero.update(null,k,0,0,cinema.error);
+                heroDirty=true;wake();return;
+            }
+            showBackdrop(b);
+            cinemaShownMovie=movie;
+            cinemaShownIndex=cinemaIndex;
+            cinema.prepareRequest(movie);
+            cinemaHero.update(movie,k,cinemaShownIndex,cinema.movies.size(),cinema.error);
+            // Prefetch only after the selected movie settles; rapid input must not queue an entire programme.
+            if ((b!=null || movie.imageFailed) && movie.details && !movie.preparing) {
+                if(next!=null) cinema.prepare(next);
+                if(previous!=null && previous.details) cinema.image(previous);
+            }
+            if (cinemaButton==0 && movie.trailer.isEmpty()) cinemaButton=1;
+        } else {
+            cinemaShownMovie=null;cinemaHero.update(null,k,0,0,cinema.error);showBackdrop(null);
+        }
+        heroDirty = true;
+        wake();
+    }
+
+    private void browseCinema(int direction) {
+        int count=cinema.movies.size();
+        if(count<2) return;
+        cinemaIndex=(cinemaIndex+direction+count)%count;
+        cinemaRotatedAt=SystemClock.uptimeMillis();
+        updateCinema();
     }
 
     private static boolean samePicks(List<Recs.Pick> a, List<Recs.Pick> b) {
@@ -818,8 +1217,40 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         return true;
     }
 
-    /** Swaps the background with a cross-fade (from one image to another, from the gradient to an image, or back). */
+    /** Keep the latest cinema backdrop ready while the device/calendar area owns the background. */
     private void showBackdrop(Backdrop b) {
+        homeBackdrop=b;
+        transitionBackdrop(drawerOpen && HomeControls.enabled() && drawerBackdrop!=null?drawerBackdrop:b);
+    }
+
+    private String drawerSkyPhase() {
+        return SkylineLandscape.phase(System.currentTimeMillis(),data.weather.sunrise,data.weather.sunset,
+                data.weather.code,java.time.ZoneId.systemDefault());
+    }
+
+    /** Preload just one bundled sky off the UI thread; a late result never reopens the drawer. */
+    private void prepareDrawerSky() {
+        if(!running || !HomeControls.enabled() || drawerSkyLoading || SystemClock.uptimeMillis()<drawerSkyRetryAt)return;
+        String phase=drawerSkyPhase();
+        if(drawerBackdrop!=null && phase.equals(drawerSkyPhase))return;
+        drawerSkyLoading=true;
+        LOADER.execute(()->{
+            Backdrop loaded=null;
+            try { loaded=Backdrop.landscape(SkylineLandscape.image(getContext(),phase)); }
+            catch(Exception | OutOfMemoryError failure) { AppLog.w("home: screensaver background unavailable"); }
+            final Backdrop ready=loaded;
+            handler.post(()->{
+                drawerSkyLoading=false;
+                if(ready==null) { drawerSkyRetryAt=SystemClock.uptimeMillis()+60_000; return; }
+                if(!phase.equals(drawerSkyPhase())) { prepareDrawerSky(); return; }
+                drawerBackdrop=ready; drawerSkyPhase=phase;
+                if(running && drawerOpen) { transitionBackdrop(ready); drawerDirty=true; wake(); }
+            });
+        });
+    }
+
+    /** Smoothly swaps both the photograph and the glass sampled by the controls. */
+    private void transitionBackdrop(Backdrop b) {
         if (b == bgTo) return;
         long up = SystemClock.uptimeMillis();
         // In the middle of another swap, start from whichever is more visible.
@@ -838,6 +1269,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     /** What the glass shows: the photo lightened (by day), darkened (at night) or blended in between. */
     private int[] glassOf(Backdrop b) {
+        if (b.image != null) return b.glass;
         if (b.nightGlass == null || night <= 0.001f) return b.lightGlass;
         if (night >= 0.999f) return b.nightGlass;
         // During the transition, the blend (only for the current background; a photo fading in uses the nearer side).
@@ -939,7 +1371,6 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         lCardTitle.setColor(tone(L_INK, WHITE));
         lCardMeta.setColor(tone(L_DIM, 0xFF98989D));
         lQuote.setColor(tone(L_FAINT, 0xB8FFFFFF));
-        lTip.setColor(tone(L_INK, WHITE));
         lDate.setColor(tone(L_DIM, 0xFF98989D));
         lClock.setColor(tone(L_INK, WHITE));
         lWeather.setColor(tone(L_DIM, 0xFF98989D));
@@ -1116,6 +1547,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             retarget(true);
             layoutShelf();
         }
+        fitShelfLabels();
         tilesDirty = true;
         platter.invalidate();
     }
@@ -1124,32 +1556,84 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         int n = shelf.size();
         float pad = SHELF_PAD * k, gap = TILE_GAP * k;
         float full = (CONTENT_R - MARGIN) * k;
-        // Tiles in the TV banners' own 16:9, so an app's art is never stretched; never taller than L_TILE_H. The glass
-        // keeps its bottom edge, so with more apps it only gets lower.
-        float tw = Math.min(L_TILE_H * 16f / 9 * k, (full - Math.max(0, n - 1) * gap) / Math.max(1, n));
-        float th = tw * 9f / 16;
-        float width = n * tw + Math.max(0, n - 1) * gap, left = (w - width) / 2f;
-        float top = (L_PLATTER_TOP + L_TILE_H) * k - th;
-        platterRect.set(left - pad, top, left + width + pad, top + th + 2 * pad);
+        // A continuous dock with six comfortable slots; extra apps share its available width.
+        int slots = Math.max(6, n);
+        float tw = (full - 2 * pad - (slots - 1) * gap) / slots;
+        float th = L_TILE_H * k, left = MARGIN * k + pad;
+        float top = L_PLATTER_TOP * k;
+        platterRect.set(MARGIN * k, top, CONTENT_R * k, top + th + 2 * pad);
         float x = left, y = top + pad;
         for (int i = 0; i < n; i++) {
             tileRects[i].set(x, y, x + tw, y + th);
             x += tw + gap;
         }
         crispLogos.clear();
+        fitShelfLabels();
     }
 
-    /** Shelf layer: the glass bar and its shadow (it only changes with the background). */
+    private void fitShelfLabels() {
+        if (shelfName == null) return;
+        fitPaint.set(shelfName);
+        for (int i = 0; i < shelf.size() && i < tileRects.length; i++) {
+            shelf.get(i).shelfLabel = TextUtils.ellipsize(shelf.get(i).label, fitPaint,
+                    Math.max(1, tileRects[i].width() - 24 * k), TextUtils.TruncateAt.END).toString();
+        }
+    }
+
+    /** Continuous frosted dock matching the approved reference, with a barely visible glass edge. */
     private void drawPlatter(Canvas c) {
         if (shelf.isEmpty()) return;
-        float radius = (TILE_RADIUS + SHELF_PAD) * k;
-        tmp.set(platterRect);
-        tmp.offset(0, 18 * k);
-        shadow.setColor(tone(0x1F000000, 0x52000000));
-        shadows.draw(c, tmp, radius, SHADOW_BLUR * k, shadow);
-        // White glass by day; smoked glass at night.
-        scene.liquid(c, platterRect, radius, tone(0xFFFFFFFF, SMOKE), tone(0.42f, 0.12f), tone(0.03f, 0.08f),
-                tone(30, 34) * k, tone(22, 28) * k, tone(0.65f, 0.95f), 1);
+        drawShelfContainer(c,platterRect,42*k);
+    }
+
+    /** Share the dock's frost, tint and subtle edge with the Home Assistant control cards. */
+    private void drawShelfContainer(Canvas c,RectF rect,float radius) {
+        drawShelfFrost(c, rect, radius, 0.58f);
+        tileFill.setShader(null); tileFill.setStyle(Paint.Style.FILL);
+        tileFill.setColor(0x3020252B);
+        c.drawRoundRect(rect, radius, radius, tileFill);
+        tileFill.setStyle(Paint.Style.STROKE); tileFill.setStrokeWidth(k);
+        tileFill.setColor(0x24FFFFFF);
+        c.drawRoundRect(rect, radius, radius, tileFill);
+        tileFill.setStyle(Paint.Style.FILL);
+    }
+
+    /** Approved pearly glass: about 65% white, with a little of the landscape showing through. */
+    private void drawControlContainer(Canvas c,RectF rect,float radius) {
+        drawShelfFrost(c,rect,radius,0.18f);
+        controlGlassMatrix.setScale(1,rect.height());controlGlassMatrix.postTranslate(0,rect.top);
+        controlGlassGradient.setLocalMatrix(controlGlassMatrix);
+        tileFill.setStyle(Paint.Style.FILL);tileFill.setColor(0xFFFFFFFF);tileFill.setShader(controlGlassGradient);
+        c.drawRoundRect(rect,radius,radius,tileFill);tileFill.setShader(null);
+        tileFill.setStyle(Paint.Style.STROKE);tileFill.setStrokeWidth(k);tileFill.setColor(0x18FFFFFF);
+        c.drawRoundRect(rect,radius,radius,tileFill);tileFill.setStyle(Paint.Style.FILL);
+    }
+
+    private void drawShelfFrost(Canvas c, RectF rect, float radius, float alpha) {
+        Bitmap frost = scene.frostImage();
+        if (frost == null) return;
+        BitmapShader shader = imageShaders.get(frost);
+        if (shader == null) {
+            shader = new BitmapShader(frost, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
+            imageShaders.put(frost, shader);
+        }
+        imageMatrix.setScale(w / (float) frost.getWidth(), h / (float) frost.getHeight());
+        shader.setLocalMatrix(imageMatrix);
+        imageFill.setShader(shader); imageFill.setAlpha(Math.round(255 * alpha));
+        c.drawRoundRect(rect, radius, radius, imageFill);
+        imageFill.setShader(null); imageFill.setAlpha(255);
+    }
+
+    /** A light glass gradient that leaves the underlying photo visible throughout the focus animation. */
+    private void drawGlassFocus(Canvas c, RectF rect, float radius, float opacity) {
+        drawShelfFrost(c,rect,radius,opacity*0.18f);
+        glassFocusMatrix.setScale(1,rect.height());
+        glassFocusMatrix.postTranslate(0,rect.top);
+        glassFocusGradient.setLocalMatrix(glassFocusMatrix);
+        glassFocusPaint.setShader(glassFocusGradient);
+        glassFocusPaint.setAlpha(Math.round(255*Ui.clamp(opacity)));
+        c.drawRoundRect(rect,radius,radius,glassFocusPaint);
+        glassFocusPaint.setAlpha(255); glassFocusPaint.setShader(null);
     }
 
     /** The quotes row's text and sizes, for one set of coins, prices and text size. */
@@ -1260,65 +1744,39 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         }
     }
 
-    /**
-     * App icon like the ones in the tvOS 27 Dock: the brand color edge to edge (a soft gradient) with the logo.
-     * Focused: it grows 20% from the center, with a deep shadow (it "rises" toward the viewer) and a subtle glow at the
-     * top. No border and no reflection, as Apple does it.
-     */
+    /** White icons and names stay transparent at rest; the focused app has a frosted glass background. */
     private void drawShelfTile(Canvas c, int i) {
         HomeApps.Item it = shelf.get(i);
-        // Lifted to be moved: a little bigger than focused, with a deeper shadow.
         float l = i == liftIndex ? Math.max(0, moveLift.value) : 0;
-        float f = tileFocus[i].value, fc = Ui.clamp(f), s = 1 + FOCUS_GROW * f + LIFT_GROW * l;
+        float f = tileFocus[i].value, fc = Ui.clamp(f), s = 1 + 0.04f * f + LIFT_GROW * l;
         RectF base = tileRects[i];
-        float bw = base.width(), bh = base.height(), r0 = TILE_RADIUS * k;
-        float cx = base.centerX(), cy = base.centerY();
-        cell.set(cx - bw * s / 2, cy - bh * s / 2, cx + bw * s / 2, cy + bh * s / 2);
-        float r = r0 * s;
-        // Shadow at the resting icon size, enlarged by the transform (so the blur stays cached): short at rest, deep
-        // and lower when focused.
-        c.save();
-        c.translate(cx, cy);
-        c.scale(s, s);
-        tmp.set(-bw / 2, -bh / 2, bw / 2, bh / 2);
-        tmp.offset(0, (4 + 14 * f + 6 * l) * k);
-        shadowDeep.setColor(Ui.alpha(0xFF000000, tone(0.14f, 0.3f) + tone(0.18f, 0.3f) * fc + 0.14f * Ui.clamp(l)));
-        shadows.draw(c, tmp, r0, DEEP_BLUR * k, shadowDeep);
-        c.restore();
-        int[] style = TILE_STYLE.get(it.key);
-        if (it.logo != null && style != null) {
-            if (tileShaders.length != shelf.size() || tileShaderH != bh) {
-                tileShaders = new LinearGradient[shelf.size()];
-                tileShaderH = bh;
-                tileGlow = new LinearGradient(0, -bh / 2, 0, 0, 0x14FFFFFF, 0x00FFFFFF, Shader.TileMode.CLAMP);
-            }
-            if (tileShaders[i] == null) {
-                tileShaders[i] = new LinearGradient(0, -bh / 2, 0, bh / 2, style[0], style[1], Shader.TileMode.CLAMP);
-            }
-            c.save();
-            c.translate(cx, cy);
-            c.scale(s, s);
-            tmp.set(-bw / 2, -bh / 2, bw / 2, bh / 2);
-            tileFill.setShader(tileShaders[i]);
-            tileFill.setAlpha(255);
-            c.drawRoundRect(tmp, r0, r0, tileFill);
-            if (fc > 0.01f) {
-                tileFill.setShader(tileGlow);
-                tileFill.setAlpha(Math.round(255 * fc));
-                c.drawRoundRect(tmp, r0, r0, tileFill);
-                tileFill.setAlpha(255);
-            }
-            tileFill.setShader(null);
-            c.restore();
-            drawLogo(c, it, cell, s, style[2]);
-        } else if (it.logo != null) {
-            tileFill.setShader(null);
-            tileFill.setColor(0xFF161618);
-            c.drawRoundRect(cell, r, r, tileFill);
-            drawLogo(c, it, cell, s, 0);
-        } else {
-            if (it.tile != null) roundImage(c, it.tile, cell, r);
+        float bw = base.width(), bh = base.height(), r = TILE_RADIUS * k;
+        if (fc > 0.01f) {
+            cell.set(base.centerX() - bw * s / 2, base.centerY() - bh * s / 2,
+                    base.centerX() + bw * s / 2, base.centerY() + bh * s / 2);
+            tmp.set(cell); tmp.offset(0, 12 * k);
+            shadowDeep.setColor(Ui.alpha(0xFF000000, fc * 0.3f));
+            shadows.draw(c, tmp, r * s, DEEP_BLUR * k, shadowDeep);
+            drawGlassFocus(c, cell, r * s, fc);
         }
+        c.save();
+        c.translate(base.centerX(), base.centerY());
+        c.scale(s, s);
+        float iconY = -bh * 0.16f;
+        if (it.shelfIcon != null) {
+            Bitmap icon = it.shelfIcon;
+            float fit = Math.min(bw * 0.55f / icon.getWidth(), bh * 0.32f / icon.getHeight());
+            float iw = icon.getWidth() * fit, ih = icon.getHeight() * fit;
+            tmp.set(-iw / 2, iconY - ih / 2, iw / 2, iconY + ih / 2);
+            bitmapPaint.setColorFilter(whiteLogo);
+            c.drawBitmap(icon, null, tmp, bitmapPaint);
+            bitmapPaint.setColorFilter(null);
+        } else {
+            Symbols.draw(getContext(), c, "apps", 0, iconY, bh * 0.3f, 0xFFFFFFFF);
+        }
+        if (shelfName != null) c.drawText(it.shelfLabel != null ? it.shelfLabel : it.label,
+                0, bh * 0.34f, shelfName);
+        c.restore();
     }
 
     /**
@@ -1405,12 +1863,36 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     // MARK: - Bottom drawer
 
     private static List<HomeApps.Item> drawerList(Context c) {
+        if(HomeControls.enabled()) {
+            List<HomeApps.Item> controls=new ArrayList<>();
+            for(int i=0;i<5+ApplianceState.KEYS.length;i++) {
+                HomeApps.Item item=new HomeApps.Item();
+                item.kind=8; item.key=i>=5?ApplianceState.KEYS[i-5]:i==4?"bedroom":i==3?"study":HomeControlState.ENTITIES[i];
+                item.label=i>=5?ApplianceState.TITLES[i-5]:i==4?"Dormitorio":i==3?"Estudio":HomeControlState.TITLES[i];
+                controls.add(item);
+            }
+            return controls;
+        }
         List<HomeApps.Item> list = HomeApps.allInputs(c);
         list.addAll(HomeApps.drawerShortcuts());
         return list;
     }
 
     private void setDrawerItems(List<HomeApps.Item> list) {
+        // Reconcile on the UI thread, including late background reloads, using the latest study state.
+        if(HomeControls.enabled()) {
+            list=new ArrayList<>(list);
+            for(int i=list.size()-1;i>=0;i--) {
+                String key=list.get(i).key;
+                if(("study".equals(key) && studyControls.state.allOff)
+                        || ("bedroom".equals(key) && !bedroomControls.state.anyOn)) list.remove(i);
+                else for(int appliance=0;appliance<ApplianceState.KEYS.length;appliance++)
+                    if(ApplianceState.KEYS[appliance].equals(key) && !applianceControls.states[appliance].active){list.remove(i);break;}
+            }
+        }
+        String focusedKey=drawerIndex<drawerItems.size()?drawerItems.get(drawerIndex).key:null;
+        int nextIndex=Math.min(drawerIndex,Math.max(0,list.size()-1));
+        for(int i=0;i<list.size();i++) if(list.get(i).key.equals(focusedKey)) nextIndex=i;
         int inputs = 0;
         while (inputs < list.size() && (list.get(inputs).kind == HomeApps.INPUT || list.get(inputs).kind == HomeApps.LIVE_TV)) inputs++;
         boolean same = list.size() == drawerItems.size();
@@ -1418,6 +1900,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             same = list.get(i).key.equals(drawerItems.get(i).key) && list.get(i).connected == drawerItems.get(i).connected;
         }
         drawerItems = list;
+        drawerIndex=nextIndex;
         drawerInputs = inputs;
         if (drawerFocus.length != list.size()) {
             drawerFocus = new Spring[list.size()];
@@ -1430,12 +1913,26 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             retarget(true);
         }
         layoutDrawer();
-        if (!same) drawerDirty = true;
+        if (!same) { retarget(false); drawerDirty = true; }
     }
+
+    private int controlKind(int index) {
+        if(index<0 || index>=drawerItems.size()) return -1;
+        String key=drawerItems.get(index).key;
+        for(int i=0;i<ApplianceState.KEYS.length;i++)if(ApplianceState.KEYS[i].equals(key))return 5+i;
+        return "bedroom".equals(key)?4:"study".equals(key)?3:index;
+    }
+    private StudyControls groupControls(int kind) { return kind==4?bedroomControls:studyControls; }
 
     private void layoutDrawer() {
         int n = drawerItems.size();
         float left = MARGIN * k, right = CONTENT_R * k;
+        if(HomeControls.enabled()) {
+            float gap=24*k, width=(right-left-(n-1)*gap)/n;
+            for(int i=0;i<n;i++) drawerRects[i].set(left+i*(width+gap),ROW_TOP*k,left+i*(width+gap)+width,730*k);
+            targetControlFocus(false);
+            drawerDirty=true; return;
+        }
         float gap = 18 * k, groupGap = 56 * k;
         int groups = drawerInputs > 0 && drawerInputs < n ? 2 : 1;
         float tw = Math.min(230 * k, (right - left - Math.max(0, n - groups) * gap - (groups - 1) * groupGap) / Math.max(1, n));
@@ -1455,25 +1952,34 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     private void openDrawer() {
         if (drawerItems.isEmpty()) return;
+        if(!drawerOpen) drawerReturnZone=zone==Z_EVENTS || zone==Z_EVENT_TABS || zone==Z_BOARD || zone==Z_BOARD_HEADER || zone==Z_BOARD_BLOCK?zone:Z_SHELF;
         drawerOpen = true;
+        prepareDrawerSky();
+        if(HomeControls.enabled() && drawerBackdrop!=null)transitionBackdrop(drawerBackdrop);
+        coverEditing=false;
+        if(running && HomeControls.enabled()) {homeControls.start(controlsListener);applianceControls.start(this::deviceGroupsChanged);}
         drawer.target = 1;
         zone = Z_DRAWER;
         drawerIndex = shelf.isEmpty() ? 0 : nearest(drawerRects, tileRects[shelfIndex].centerX());
         for (int i = 0; i < drawerFocus.length; i++) drawerFocus[i].snap(i == drawerIndex ? 1 : 0);
+        targetControlFocus(true);
         drawerDirty = true;
     }
 
     private void closeDrawer() {
         drawerOpen = false;
+        transitionBackdrop(homeBackdrop);
+        homeControls.stop(); applianceControls.stop(); coverEditing=false;
         drawer.target = 0;
-        zone = Z_SHELF;
+        zone = drawerReturnZone;
         for (Spring f : drawerFocus) f.snap(0);   // the drawer goes away: its focus doesn't need to animate
+        targetControlFocus(true);
         if (!shelf.isEmpty() && drawerIndex < drawerRects.length) shelfIndex = nearest(tileRects, drawerRects[drawerIndex].centerX());
     }
 
-    /** Color for the drawer's text and symbols: dark by day, white at night. */
+    /** White control/calendar glass retains dark ink at every hour. */
     private int drawerInk(float alpha) {
-        return Ui.alpha(tone(L_INK, 0xFFFFFFFF), alpha);
+        return Ui.alpha(HomeControls.enabled()?L_INK:tone(L_INK, 0xFFFFFFFF), alpha);
     }
 
     /** Glass for a drawer card or button: white by day, smoked at night (both during the transition). */
@@ -1495,6 +2001,12 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     private void drawDrawer(Canvas c) {
         if (drawerItems.isEmpty()) return;
+        if(HomeControls.enabled()) {
+            drawHomeControls(c);
+            drawControlContainer(c,calendarVisual.panel,30*k);
+            calendarVisual.panel(c,drawerInk(1),zone==Z_AGENDA && !sheetOpen);
+            return;
+        }
         rowTitle.setColor(tone(L_DIM, 0xB3FFFFFF));
         cardTitle.setColor(tone(L_DIM, 0xB3FFFFFF));
         cardText.setColor(drawerInk(0.95f));
@@ -1513,6 +2025,169 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         if (top >= 0) drawDrawerTile(c, top);
         if (Prefs.weather()) drawWeatherCard(c, weatherCard);
         if (Prefs.quotes() && HomeData.active().length > 0) drawQuotesCard(c, quotesCard);
+    }
+
+    private void drawHomeControls(Canvas c) {
+        for(int i=0;i<drawerItems.size();i++) {
+            RectF r=drawerRects[i];
+            int kind=controlKind(i);
+            StudyControls group=kind>=3 && kind<=4?groupControls(kind):null;
+            ApplianceState appliance=kind>=5?applianceControls.states[kind-5]:null;
+            float f=Ui.clamp(drawerFocus[i].value), x=r.left+32*k;
+            c.save();
+            c.scale(1+0.025f*f,1+0.025f*f,r.centerX(),r.centerY());
+            drawControlContainer(c,r,30*k);
+            fill.setShader(null);
+            HomeControlState state=group!=null || appliance!=null?null:homeControls.states[kind];
+            if(kind==2 || appliance!=null) {
+                float position=appliance!=null?appliance.progress:coverEditing?coverDraft:state.position;
+                if(position>0) {
+                    // The card itself is the percentage track; clip a rounded fill to its full outline.
+                    c.save(); c.clipRect(r.left,r.top,r.left+r.width()*position/100f,r.bottom);
+                    fill.setColor(drawerInk(kind==2 && coverEditing?0.12f:0.07f));
+                    c.drawRoundRect(r,30*k,30*k,fill);
+                    c.restore();
+                }
+            }
+            int ink=drawerInk(group!=null || appliance!=null || state.available?1:0.65f);
+            drawControlIcon(c,kind,x+20*k,r.top+48*k,ink);
+            cardText.setColor(ink);
+            fitPaint.set(cardText);String label=drawerItems.get(i).label;
+            float titleWidth=Math.max(20*k,r.width()-122*k),titleSize=fitPaint.getTextSize();
+            if(fitPaint.measureText(label)>titleWidth)fitPaint.setTextSize(Math.max(16*k,titleSize*titleWidth/fitPaint.measureText(label)));
+            c.drawText(TextUtils.ellipsize(label,fitPaint,titleWidth,TextUtils.TruncateAt.END).toString(),x+58*k,r.top+58*k,fitPaint);
+            cardTitle.setColor(ink);
+            if(group!=null) {
+                fitPaint.set(cardText); fitPaint.setTextSize(32*k);
+                float statusCenter=r.top+132*k+(fitPaint.ascent()+fitPaint.descent())/2;
+                fitPaint.setTextSize((group.state.actions.length==1?32:21)*k);
+                float firstBase=statusCenter-(fitPaint.ascent()+fitPaint.descent())/2
+                        -(group.state.actions.length-1)*31*k/2;
+                fitPaint.setColor(drawerInk(group.state.anyOn || group.state.allOff?0.95f:0.65f));
+                for(int row=0;row<group.state.actions.length;row++) {
+                    c.drawText(TextUtils.ellipsize(group.state.actions[row],fitPaint,r.width()-64*k,TextUtils.TruncateAt.END).toString(),x,firstBase+31*row*k,fitPaint);
+                }
+            } else {
+                String value=appliance!=null?appliance.remaining:kind==2 && coverEditing?coverDraft+" % abierta":state.value;
+                fitPaint.set(cardText); fitPaint.setTextSize(32*k);
+                c.drawText(TextUtils.ellipsize(value,fitPaint,r.width()-64*k,TextUtils.TruncateAt.END).toString(),x,r.top+132*k,fitPaint);
+            }
+            if(homeControls.pending==kind || (group!=null && group.pending)) drawControlHourglass(c,r.right-32*k,r.top+32*k,ink);
+            c.restore();
+        }
+        float alpha=Ui.clamp(controlFocusAlpha.value);
+        if(controlFocusPlaced && alpha>0.001f) {
+            float cx=controlFocusX.value*k, cy=controlFocusY.value*k;
+            float halfW=controlFocusW.value*k/2, halfH=controlFocusH.value*k/2;
+            controlFocusRect.set(cx-halfW,cy-halfH,cx+halfW,cy+halfH);
+            fill.setShader(null); fill.setStyle(Paint.Style.STROKE);
+            fill.setStrokeWidth(3.5f*k);
+            fill.setColor(Ui.alpha(0x40FFFFFF,alpha));
+            c.drawRoundRect(controlFocusRect,32*k,32*k,fill);
+            fill.setStyle(Paint.Style.FILL);
+        }
+    }
+
+    /** One continuous outline follows remote/accessibility focus and changing three/four-card layouts. */
+    private void targetControlFocus(boolean snap) {
+        if(!HomeControls.enabled() || k<=0 || drawerIndex<0 || drawerIndex>=drawerRects.length) return;
+        RectF r=drawerRects[drawerIndex];
+        if(r.isEmpty()) return;
+        boolean visible=drawerOpen && !sheetOpen && zone==Z_DRAWER;
+        controlFocusX.target=r.centerX()/k; controlFocusY.target=r.centerY()/k;
+        controlFocusW.target=r.width()/k*1.025f+4;
+        controlFocusH.target=r.height()/k*1.025f+4;
+        if(snap || !controlFocusPlaced) {
+            controlFocusX.snap(controlFocusX.target); controlFocusY.snap(controlFocusY.target);
+            controlFocusW.snap(controlFocusW.target); controlFocusH.snap(controlFocusH.target);
+            controlFocusPlaced=true;
+        }
+        controlFocusAlpha.target=visible?1:0;
+        if(snap) controlFocusAlpha.snap(controlFocusAlpha.target);
+        drawerDirty=true;
+    }
+
+    private void drawControlHourglass(Canvas c,float x,float y,int ink) {
+        float phase=(SystemClock.uptimeMillis()%1600)/1600f;
+        float spin=Ui.clamp((phase-0.65f)/0.35f);
+        spin=spin*spin*(3-2*spin);
+        c.save(); c.translate(x,y); c.rotate(180*spin); c.scale(k,k);
+        fill.setShader(null); fill.setColor(ink); fill.setStyle(Paint.Style.STROKE); fill.setStrokeWidth(2);
+        controlHourglass.reset(); controlHourglass.moveTo(-10,-14); controlHourglass.lineTo(10,-14);
+        controlHourglass.lineTo(10,-9); controlHourglass.lineTo(-10,9); controlHourglass.lineTo(-10,14);
+        controlHourglass.lineTo(10,14); controlHourglass.lineTo(10,9); controlHourglass.lineTo(-10,-9); controlHourglass.close();
+        c.drawPath(controlHourglass,fill);
+        fill.setStyle(Paint.Style.FILL);
+        float sand=1-Math.min(1,phase/0.65f);
+        controlHourglass.reset(); controlHourglass.moveTo(-7*sand,-10); controlHourglass.lineTo(7*sand,-10); controlHourglass.lineTo(0,-10+7*sand); controlHourglass.close();
+        c.drawPath(controlHourglass,fill);
+        controlHourglass.reset(); controlHourglass.moveTo(-7*(1-sand),11); controlHourglass.lineTo(7*(1-sand),11); controlHourglass.lineTo(0,11-7*(1-sand)); controlHourglass.close();
+        c.drawPath(controlHourglass,fill); c.restore();
+    }
+
+    /** Small code-native line icons, matching the monochrome symbols in the drawer. */
+    private void drawControlIcon(Canvas c,int index,float x,float y,int color) {
+        if(index==0) { Symbols.draw(getContext(),c,"sparkles",x,y,34*k,color); return; }
+        fill.setShader(null); fill.setColor(color); fill.setStyle(Paint.Style.STROKE); fill.setStrokeWidth(2.5f*k);
+        if(index==7) {
+            c.drawRoundRect(x-19*k,y-19*k,x+19*k,y+19*k,2*k,2*k,fill);
+            c.drawLine(x-18*k,y-9*k,x+18*k,y-9*k,fill);
+            c.drawLine(x,y-9*k,x,y-2*k,fill);
+            c.drawLine(x-4*k,y-2*k,x+4*k,y-2*k,fill);
+            c.drawLine(x-12*k,y+15*k,x+12*k,y+15*k,fill);
+            c.drawRoundRect(x-8*k,y+5*k,x+8*k,y+14*k,1*k,1*k,fill);
+        } else if(index>=5) {
+            c.drawRoundRect(x-19*k,y-19*k,x+19*k,y+19*k,3*k,3*k,fill);
+            c.drawLine(x-18*k,y-10*k,x+18*k,y-10*k,fill);
+            if(index==5)c.drawCircle(x,y+4*k,11*k,fill);
+            else {
+                for(int n=0;n<3;n++)c.drawRoundRect(x+(-12+n*9)*k,y-4*k,x+(-7+n*9)*k,y+11*k,2*k,2*k,fill);
+                c.drawLine(x-13*k,y+14*k,x+13*k,y+14*k,fill);
+            }
+            c.drawLine(x-12*k,y-15*k,x-5*k,y-15*k,fill);
+        } else if(index==4) {
+            c.drawLine(x-20*k,y-17*k,x-20*k,y+17*k,fill);
+            c.drawLine(x+20*k,y-4*k,x+20*k,y+17*k,fill);
+            c.drawRoundRect(x-20*k,y-3*k,x+20*k,y+11*k,2*k,2*k,fill);
+            c.drawRoundRect(x-15*k,y-12*k,x-4*k,y-4*k,2*k,2*k,fill);
+        } else if(index==3) {
+            c.drawRoundRect(x-16*k,y-14*k,x+16*k,y+8*k,2*k,2*k,fill);
+            c.drawLine(x-16*k,y+8*k,x-21*k,y+15*k,fill);
+            c.drawLine(x-21*k,y+15*k,x+21*k,y+15*k,fill);
+            c.drawLine(x+21*k,y+15*k,x+16*k,y+8*k,fill);
+        } else if(index==1) {
+            for(int n=0;n<3;n++) c.drawRoundRect(x+(n*12-17)*k,y-16*k,x+(n*12-9)*k,y+16*k,3*k,3*k,fill);
+            c.drawLine(x-20*k,y+10*k,x+20*k,y+10*k,fill);
+        } else {
+            c.drawRoundRect(x-19*k,y-18*k,x+19*k,y+18*k,2*k,2*k,fill);
+            for(int n=0;n<4;n++) c.drawLine(x-18*k,y+(-10+n*7)*k,x+18*k,y+(-10+n*7)*k,fill);
+        }
+        fill.setStyle(Paint.Style.FILL);
+    }
+
+    private String controlDescription(int i) {
+        int kind=controlKind(i);
+        if(kind>=5){ApplianceState state=applianceControls.states[kind-5];return ApplianceState.TITLES[kind-5]+", "+state.remaining+(state.progress>=0?", "+Math.round(state.progress)+" por ciento":"");}
+        if(kind>=3) {
+            StudyControls group=groupControls(kind);
+            return drawerItems.get(i).label+", "+group.state.actionDescription
+                    +(group.pending?", esperando confirmación":group.state.anyOn?", OK para apagar":"");
+        }
+        if(i<0 || i>=3) return "";
+        return HomeControlState.TITLES[i]+", "+(i==2 && coverEditing?coverDraft+" por ciento":homeControls.states[i].value)
+                +(homeControls.pending==i?", esperando confirmación":"")
+                +(i==2?", OK para ajustar; izquierda y derecha para cambiar; OK para aplicar; Atrás para cancelar":"");
+    }
+
+    private void activateControl() {
+        int i=drawerIndex;
+        int kind=controlKind(i);
+        if(kind>=5)return;
+        if(kind>=3) { groupControls(kind).turnOff(); return; }
+        if(!homeControls.ready(i)) return;
+        if(i==2 && !coverEditing) { coverDraft=homeControls.states[2].position; coverEditing=true; }
+        else { coverEditing=false; homeControls.send(i,i==2?coverDraft:0); }
+        drawerDirty=true; wake(); spoken.focusMoved();
     }
 
     /** Square drawer button: symbol and name; an input with no device is dimmed. Focused: white, with dark text. */
@@ -1698,10 +2373,22 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     /** Sets the springs' targets from the current focus (snap: no animation). */
     private void retarget(boolean snap) {
+        agendaScroll.target=zone==Z_AGENDA?1:0;
+        if(snap) agendaScroll.snap(agendaScroll.target);
+        recentScroll.target=zone==Z_BOARD || zone==Z_BOARD_HEADER || zone==Z_BOARD_BLOCK?5:zone==Z_EVENTS || zone==Z_EVENT_TABS?4:zone==Z_RECENT?3:zone==Z_INTERESTS?2:zone==Z_CONTINUING?1:0;
+        if(snap) recentScroll.snap(recentScroll.target);
+        motionDirty=true;
+        updateRecent();
+        updateContinuing();
+        updateInterests();
+        updateEvents();
+        updateExperiences();
+        if (Cinema.enabled()) heroDirty = true;
         // Only the group whose focus changed is redrawn (moving along the shelf doesn't redraw the hero or capsule).
         boolean tilesChanged = aim(tileFocus, !sheetOpen && zone == Z_SHELF ? shelfIndex : -1, snap);
         boolean statusChanged = aim(statusFocus, !sheetOpen && zone == Z_STATUS ? statusIndex : -1, snap);
         boolean drawerChanged = aim(drawerFocus, !sheetOpen && zone == Z_DRAWER ? drawerIndex : -1, snap);
+        targetControlFocus(snap);
         boolean heroChanged = heroFocus.target != (!sheetOpen && zone == Z_HERO ? 1 : 0);
         heroFocus.target = !sheetOpen && zone == Z_HERO ? 1 : 0;
         if (snap) heroFocus.snap(heroFocus.target);
@@ -1941,6 +2628,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     // MARK: - Keys: only the arrows, OK and Back (system keys pass through to the system)
 
     boolean onKey(KeyEvent e) {
+        cinemaInputAt = SystemClock.uptimeMillis();
         wake();
         boolean down = e.getAction() == KeyEvent.ACTION_DOWN;
         if (reordering) return reorderKey(e, down);
@@ -2001,8 +2689,27 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     }
 
     private void back() {
+        if(coverEditing) { coverEditing=false; drawerDirty=true; wake(); spoken.focusMoved(); return; }
         if (sheetOpen) {
             closeSheet();
+        } else if(zone==Z_AGENDA) {
+            zone=Z_DRAWER; retarget(false);
+        } else if(zone==Z_BOARD) {
+            zone=Z_BOARD_BLOCK; retarget(false);
+        } else if(zone==Z_BOARD_BLOCK) {
+            zone=Z_EVENT_TABS; retarget(false);
+        } else if(zone==Z_BOARD_HEADER) {
+            zone=Z_BOARD_BLOCK; retarget(false);
+        } else if(zone==Z_EVENTS) {
+            zone=Z_EVENT_TABS; retarget(false);
+        } else if(zone==Z_EVENT_TABS) {
+            zone=JellyfinRecent.enabled()?Z_RECENT:Z_INTERESTS; retarget(false);
+        } else if(zone==Z_INTERESTS) {
+            zone=JellyfinRecent.enabled()?Z_CONTINUING:Z_SHELF; retarget(false);
+        } else if(zone==Z_RECENT) {
+            zone=Z_INTERESTS; retarget(false);
+        } else if(zone==Z_CONTINUING) {
+            zone=Z_SHELF; retarget(false);
         } else if (zone == Z_DRAWER || zone == WIDGETS) {
             closeDrawer();
             retarget(false);
@@ -2016,6 +2723,10 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     }
 
     private void move(int dx, int dy) {
+        if(coverEditing && zone==Z_DRAWER && !sheetOpen) {
+            if(dx!=0) { coverDraft=HomeControlState.step(coverDraft,dx); drawerDirty=true; wake(); click.move(); spoken.focusMoved(); }
+            return;
+        }
         if (sheetOpen) {
             moveGrid(dx, dy);
             return;
@@ -2135,6 +2846,45 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     private void activate() {
         wake();
+        if(!sheetOpen && zone==Z_BOARD_BLOCK){
+            if(!experienceBoard.data.items.isEmpty()){zone=Z_BOARD;retarget(false);}
+            else CulturalDialogs.experiences(activity,experienceBoard,this::updateExperiences);
+            return;
+        }
+        if(!sheetOpen && zone==Z_BOARD_HEADER) {
+            CulturalDialogs.experiences(activity,experienceBoard,this::updateExperiences);return;
+        }
+        if(!sheetOpen && zone==Z_BOARD) {
+            if(experienceBoard.data.toggle(experienceIndex)){experienceBoard.save();updateExperiences();}return;
+        }
+        if(!sheetOpen && zone==Z_EVENT_TABS) {
+            if(eventHeader==4) CulturalDialogs.settings(activity,events);
+            else if(!eventResults.isEmpty()) { zone=Z_EVENTS; retarget(false); }
+            return;
+        }
+        if(!sheetOpen && zone==Z_EVENTS) {
+            if(eventIndex<eventResults.size())CulturalDialogs.details(activity,events,eventResults.get(eventIndex));
+            return;
+        }
+        if(!sheetOpen && zone==Z_AGENDA) {
+            if(calendarVisual.navigation.header){calendarVisual.shift(calendarVisual.navigation.side==0?-1:1);drawerDirty=true;requestAgendaMonth();wake();spoken.focusMoved();}
+            else {
+                removeCallbacks(calendarMonthLoad);
+                java.time.LocalDate day=calendarVisual.navigation.selected;
+                CulturalDialogs.calendarDay(activity,homeCalendars,day,result->{calendarVisual.monthResult(java.time.YearMonth.from(day),result);drawerDirty=true;wake();});
+            }
+            return;
+        }
+        if(!sheetOpen && zone==Z_INTERESTS) {
+            if(!interests.open(activity,interestIndex)) showToast(Ui.trf("Couldn't open {app}.","app",InterestData.NAMES[interests.items.get(interestIndex).programme]));
+            return;
+        }
+        if(!sheetOpen && zone==Z_DRAWER && HomeControls.enabled()) { activateControl(); return; }
+        if(!sheetOpen && zone==Z_RECENT) { recent.open(activity,recentIndex); return; }
+        if(!sheetOpen && zone==Z_CONTINUING) { continuing.open(activity,continueIndex); return; }
+        if (!sheetOpen && zone==Z_CINEMA_MOVIES) {
+            zone=Z_CINEMA; cinemaButton=cinemaHero.firstButton(); retarget(false); return;
+        }
         if (reordering) {   // TalkBack's click while moving an app: drop it
             dropReorder();
             return;
@@ -2171,12 +2921,32 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             if (p == null || p.pkg == null) return;
             it = HomeApps.app(p.pkg, Recs.serviceName(p), p.link);
             r = cardRects[cardIndex];
+        } else if (zone == Z_CINEMA) {
+            Cinema.Movie movie = cinemaMovie();
+            if (movie == null) return;
+            if (cinemaButton == 2) { cinema.requestMovie(movie); return; }
+            if (cinemaButton == 0) cinema.openTrailer(activity,movie);
+            else if (movie.state == Cinema.ERROR) { movie.checkedAt=0; cinema.prepare(movie); }
+            else cinema.openSessions(activity,movie);
+            return;
         } else {
             if (shelf.isEmpty()) return;
             it = shelf.get(shelfIndex);
             r = tileRects[shelfIndex];
         }
         click.open();
+        if(it.kind==HomeApps.TOOLS) {
+            ToolsDialog.show((HomeActivity)activity);
+            return;
+        }
+        if(it.kind==HomeApps.HOME_ASSISTANT) {
+            openDrawer(); drawerIndex=0;
+            for(int i=0;i<drawerItems.size();i++) {
+                int kind=controlKind(i);
+                if(kind>=3 && kind<=4 && groupControls(kind).state.anyOn) { drawerIndex=i; break; }
+            }
+            retarget(false); return;
+        }
         if (it.kind == HomeApps.ALL_APPS) {
             openSheet();
             return;
@@ -2386,21 +3156,56 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             for (int i = 0; i < others.size(); i++) out.add(a11yId(GRID, i));
             return;
         }
-        for (int i = picksOn() ? 0 : 3; i < 3 + lightButtons.size(); i++) out.add(a11yId(Z_TOP, i));
-        for (int i = 0; i < Math.min(3, cards.size()); i++) out.add(a11yId(Z_CARDS, i));
+        for (int i = Cinema.enabled() ? 3 : picksOn() ? 0 : 3; i < 3 + lightButtons.size(); i++) out.add(a11yId(Z_TOP, i));
+        if (Cinema.enabled() && cinemaMovie()!=null) {
+            out.add(a11yId(Z_CINEMA_MOVIES,0));
+            if (!cinemaMovie().trailer.isEmpty()) out.add(a11yId(Z_CINEMA,0));
+            out.add(a11yId(Z_CINEMA,1));
+            if (cinemaHero.lastButton()==2) out.add(a11yId(Z_CINEMA,2));
+        } else for (int i = 0; i < Math.min(3, cards.size()); i++) out.add(a11yId(Z_CARDS, i));
         for (int i = 0; i < shelf.size(); i++) out.add(a11yId(Z_SHELF, i));
+        if(JellyfinRecent.enabled()) for(int i=0;i<RecentRow.visibleCount(continuing.items.size());i++) out.add(a11yId(Z_CONTINUING,i));
+        for(int i=0;i<interests.items.size();i++) out.add(a11yId(Z_INTERESTS,i));
+        if(JellyfinRecent.enabled()) for(int i=0;i<RecentRow.visibleCount(recent.items.size());i++) out.add(a11yId(Z_RECENT,i));
+        for(int i=0;i<5;i++)out.add(a11yId(Z_EVENT_TABS,i));
+        for(int i=0;i<eventPanel.count();i++)out.add(a11yId(Z_EVENTS,i));
+        out.add(a11yId(Z_BOARD_BLOCK,0));
+        out.add(a11yId(Z_BOARD_HEADER,0));
+        if(zone==Z_BOARD)for(int i=0;i<experienceBoard.data.items.size();i++)out.add(a11yId(Z_BOARD,i));
         for (int i = 0; i < drawerItems.size(); i++) out.add(a11yId(Z_DRAWER, i));
-        if (drawerOpen && Prefs.weather()) out.add(a11yId(WIDGETS, 0));
-        if (drawerOpen && Prefs.quotes() && HomeData.active().length > 0) out.add(a11yId(WIDGETS, 1));
+        if(HomeControls.enabled())for(int i=0;i<calendarVisual.count();i++)out.add(a11yId(Z_AGENDA,i));
+        if (!HomeControls.enabled() && drawerOpen && Prefs.weather()) out.add(a11yId(WIDGETS, 0));
+        if (!HomeControls.enabled() && drawerOpen && Prefs.quotes() && HomeData.active().length > 0) out.add(a11yId(WIDGETS, 1));
     }
 
     private String a11yText(int id) {
         int group = (id - 1) / 1000, i = (id - 1) % 1000;
         switch (group) {
+            case Z_BOARD_BLOCK:return Ui.tr("The experience chalkboard");
+            case Z_BOARD_HEADER:return Ui.tr("Experience settings");
+            case Z_BOARD:{if(zone!=Z_BOARD || i>=experienceBoard.data.items.size())return "";ExperienceData.Item item=experienceBoard.data.items.get(i);return item.text+", "+(item.done?Ui.tr("Completed"):Ui.tr("Pending"));}
+            case Z_EVENT_TABS: return CulturalPanel.tabName(i);
+            case Z_EVENTS: {
+                int at=eventPanel.resultIndex(i);
+                return at>=0 && at<eventResults.size()?(eventPanel.featured(i)?Ui.tr("Featured event")+", ":"")+eventResults.get(at).event.title+", "+eventResults.get(at).date+", "+eventResults.get(at).event.address+(eventResults.get(at).event.free?", "+Ui.tr("Free admission"):"")+(", "+events.reasonLabel(eventResults.get(at))):"";
+            }
+            case Z_INTERESTS:
+                if(i>=interests.items.size()) return "";
+                InterestData.Episode e=interests.items.get(i);
+                if(!e.ready()) return InterestData.NAMES[e.programme]+", "+Ui.tr("Unavailable");
+                return InterestData.NAMES[e.programme]+", "+e.title+", "+Html.fromHtml(e.description,Html.FROM_HTML_MODE_LEGACY).toString();
+            case Z_RECENT: return i<recent.items.size()?recent.items.get(i).name+", "+Ui.tr("Recently added"):"";
+            case Z_CONTINUING: return i<continuing.items.size()?continuing.items.get(i).name+", "+Ui.tr("Continue watching")+", "+continuing.items.get(i).subtitle:"";
+            case Z_CINEMA_MOVIES: return cinemaMovie()==null?"":cinemaMovie().title+", "+Ui.tr("Now in cinemas")
+                    +", "+Ui.trf("{i} of {n}","i",cinemaShownIndex+1,"n",cinema.movies.size());
+            case Z_CINEMA: return cinemaMovie()==null ? "" : cinemaMovie().title+", "+cinemaHero.buttonText(i)
+                    +(cinemaHero.enabled(cinemaMovie(),i)?"":", "+Ui.tr("Unavailable"));
             case GRID:
                 if (i >= others.size()) return "";
                 return label(others, i) + ", " + Ui.trf("{i} of {n}", "i", i + 1, "n", others.size());
             case Z_TOP:
+                if(i>=3 && i<3+lightButtons.size() && lightButtons.get(i-3).kind==HomeApps.HOME_ASSISTANT)
+                    return "Home Assistant"+(deviceGroupOn()?", hay dispositivos encendidos":"");
                 if (i >= 3) return label(lightButtons, i - 3);
                 return Ui.trf("{name}, tab {i} of {n}", "name", tabs()[i], "i", i + 1, "n", 3);
             case Z_CARDS: return i < cards.size() ? pickText(cards.get(i)) : "";
@@ -2410,7 +3215,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                             "app", label(shelf, i), "n", i + 1, "total", shelf.size());
                 }
                 return label(shelf, i);
-            case Z_DRAWER: return label(drawerItems, i);
+            case Z_AGENDA: return calendarVisual.description(i);
+            case Z_DRAWER: return HomeControls.enabled()?controlDescription(i):label(drawerItems, i);
             case WIDGETS: return i == 0 ? weatherText() : quotesText();
             default: return "";
         }
@@ -2424,6 +3230,39 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         int group = (id - 1) / 1000, i = (id - 1) % 1000;
         float dy;
         switch (group) {
+            case Z_BOARD_BLOCK:experienceBoard.blockBounds(a11yRect);dy=experienceLayer.getTranslationY();break;
+            case Z_BOARD_HEADER:experienceBoard.bounds(true,0,a11yRect);dy=experienceLayer.getTranslationY();break;
+            case Z_BOARD:
+                if(zone!=Z_BOARD || i>=experienceBoard.data.items.size())return false;
+                int slot=experienceBoard.slot(i);
+                if(slot>=0 && slot<experienceBoard.count())experienceBoard.bounds(false,slot,a11yRect);
+                else {float y=(slot<0?experienceBoard.top()+ExperienceBoard.HEADER_GAP:experienceBoard.top()+ExperienceBoard.HEIGHT)*k;a11yRect.set(80*k,y,1840*k,y+8*k);}
+                dy=experienceLayer.getTranslationY();break;
+            case Z_EVENT_TABS:
+                if(i>=5)return false;
+                eventPanel.bounds(true,i,a11yRect); dy=eventLayer.getTranslationY(); break;
+            case Z_EVENTS:
+                if(i>=eventPanel.count())return false;
+                eventPanel.bounds(false,i,a11yRect); dy=eventLayer.getTranslationY(); break;
+            case Z_RECENT:
+                if(i>=RecentRow.visibleCount(recent.items.size())) return false;
+                recentRow.bounds(i,a11yRect); dy=recentLayer.getTranslationY(); break;
+            case Z_CONTINUING:
+                if(i>=RecentRow.visibleCount(continuing.items.size())) return false;
+                continueRow.bounds(i,a11yRect); dy=continueLayer.getTranslationY(); break;
+            case Z_INTERESTS:
+                if(i>=interests.items.size()) return false;
+                interestPanel.bounds(i,a11yRect); dy=interestLayer.getTranslationY(); break;
+            case Z_CINEMA_MOVIES:
+                if (cinemaMovie()==null) return false;
+                a11yRect.set(80*k,270*k,1840*k,620*k);
+                dy=heroLayer.getTranslationY();
+                break;
+            case Z_CINEMA:
+                if (cinemaMovie()==null || i>cinemaHero.lastButton()) return false;
+                a11yRect.set(cinemaHero.buttons[i]);
+                dy=heroLayer.getTranslationY();
+                break;
             case GRID: {
                 if (!sheetOpen || i >= others.size()) return false;
                 float gridWidth = COLUMNS * GRID_W + (COLUMNS - 1) * GRID_GAP;
@@ -2448,10 +3287,13 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 a11yRect.set(tileRects[i]);
                 dy = tiles.getTranslationY();
                 break;
+            case Z_AGENDA:
+                if(i>=calendarVisual.count())return false;
+                calendarVisual.bounds(i,a11yRect); dy=drawerOpen?drawerLayer.getTranslationY():h; break;
             case Z_DRAWER:
                 if (i >= drawerRects.length) return false;
                 a11yRect.set(drawerRects[i]);
-                dy = drawerOpen ? 0 : h;
+                dy = drawerOpen ? drawerLayer.getTranslationY() : h;
                 break;
             case WIDGETS:
                 if (!drawerOpen) return false;
@@ -2472,9 +3314,20 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private int a11yFocused() {
         if (sheetOpen) return others.isEmpty() ? -1 : a11yId(GRID, gridIndex);
         switch (zone) {
+            case Z_BOARD_BLOCK:return a11yId(Z_BOARD_BLOCK,0);
+            case Z_BOARD_HEADER:return a11yId(Z_BOARD_HEADER,0);
+            case Z_BOARD:return experienceBoard.data.items.isEmpty()?-1:a11yId(Z_BOARD,experienceIndex);
+            case Z_EVENT_TABS:return a11yId(Z_EVENT_TABS,eventHeader);
+            case Z_EVENTS:return eventResults.isEmpty()?-1:a11yId(Z_EVENTS,eventPanel.slot(eventIndex));
+            case Z_RECENT: return recent.items.isEmpty()?-1:a11yId(Z_RECENT,recentIndex);
+            case Z_CONTINUING: return continuing.items.isEmpty()?-1:a11yId(Z_CONTINUING,continueIndex);
+            case Z_INTERESTS: return a11yId(Z_INTERESTS,interestIndex);
+            case Z_CINEMA_MOVIES: return cinemaMovie()==null?-1:a11yId(Z_CINEMA_MOVIES,0);
+            case Z_CINEMA: return cinemaMovie()==null ? -1 : a11yId(Z_CINEMA,cinemaButton);
             case Z_TOP: return a11yId(Z_TOP, topIndex);
             case Z_CARDS: return cardIndex < cards.size() ? a11yId(Z_CARDS, cardIndex) : -1;
             case Z_SHELF: return shelf.isEmpty() ? -1 : a11yId(Z_SHELF, shelfIndex);
+            case Z_AGENDA: return a11yId(Z_AGENDA,calendarVisual.focused());
             case Z_DRAWER: return drawerItems.isEmpty() ? -1 : a11yId(Z_DRAWER, drawerIndex);
             case WIDGETS: return a11yId(WIDGETS, widgetIndex);
             default: return -1;
@@ -2484,7 +3337,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     /** The drawer's widgets that are on (0 weather, 1 quotes), with the drawer open. */
     private List<Integer> widgets() {
         List<Integer> out = new ArrayList<>();
-        if (!drawerOpen) return out;
+        if (!drawerOpen || HomeControls.enabled()) return out;
         if (Prefs.weather()) out.add(0);
         if (Prefs.quotes() && HomeData.active().length > 0) out.add(1);
         return out;
@@ -2500,6 +3353,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     /** TalkBack moved to an item: the remote's focus goes there (opening or closing the drawer on the way). */
     private void a11yFocus(int id) {
         wake();
+        if(id!=a11yId(Z_DRAWER,2)) coverEditing=false;
         int group = (id - 1) / 1000, i = (id - 1) % 1000;
         if (group == GRID) {
             if (!sheetOpen || i >= others.size()) return;
@@ -2511,6 +3365,52 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         }
         if (sheetOpen || reordering) return;
         switch (group) {
+            case Z_BOARD_BLOCK:
+            case Z_BOARD_HEADER:
+                if(drawerOpen)closeDrawer();break;
+            case Z_BOARD:
+                if(zone!=Z_BOARD || i>=experienceBoard.data.items.size())return;
+                if(drawerOpen)closeDrawer();experienceIndex=i;break;
+            case Z_EVENT_TABS:
+                if(i>=5)return;
+                if(drawerOpen)closeDrawer();
+                eventHeader=i;
+                if(i<4 && eventTab!=i) { eventTab=i; eventIndex=0; eventSelectedId=""; }
+                break;
+            case Z_EVENTS:
+                if(i>=eventPanel.count())return;
+                if(drawerOpen)closeDrawer();
+                eventIndex=eventPanel.resultIndex(i); eventSelectedId=eventResults.get(eventIndex).event.id;
+                break;
+            case Z_INTERESTS:
+                if(i>=interests.items.size()) return;
+                if(drawerOpen) closeDrawer();
+                interestIndex=i; interestProgramme=interests.items.get(i).programme;
+                break;
+            case Z_RECENT:
+                if(i>=RecentRow.visibleCount(recent.items.size())) return;
+                if(drawerOpen) closeDrawer();
+                recentIndex=i;
+                break;
+            case Z_CONTINUING:
+                if(i>=RecentRow.visibleCount(continuing.items.size())) return;
+                if(drawerOpen) closeDrawer();
+                continueIndex=i;
+                break;
+            case Z_CINEMA_MOVIES:
+                if (cinemaMovie()==null) return;
+                if (drawerOpen) closeDrawer();
+                break;
+            case Z_CINEMA:
+                if (cinemaMovie()==null || i>cinemaHero.lastButton() || (i==0 && cinemaMovie().trailer.isEmpty())) return;
+                if (drawerOpen) closeDrawer();
+                cinemaButton=i;
+                break;
+            case Z_AGENDA:
+                if(!HomeControls.enabled() || i>=calendarVisual.count()) return;
+                if(!drawerOpen) openDrawer();
+                calendarVisual.select(i);drawerDirty=true;requestAgendaMonth();
+                break;
             case Z_DRAWER:
                 if (i >= drawerItems.size()) return;
                 if (!drawerOpen) openDrawer();
@@ -2605,10 +3505,11 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             x = topRects[i].right + 4 * k;
         }
         float b = L_BUTTON * k, right = CONTENT_R * k, cy = L_BUTTON_CY * k;
-        for (int i = 2; i >= 0; i--) {
+        for (int i = lightButtons.size()-1; i >= 0; i--) {
             topRects[3 + i].set(right - b, cy - b / 2, right, cy + b / 2);
             right -= b + L_BUTTON_GAP * k;
         }
+        for(int i=3+lightButtons.size();i<topRects.length;i++) topRects[i].setEmpty();
         float top = L_CARDS_TOP * k, ch = L_CARD_H * k, g = L_CARD_GAP * k, left = MARGIN * k, tall = L_TALL_W * k;
         float wide = (CONTENT_R - MARGIN) * k - 2 * tall - 2 * g;
         cardRects[0].set(left, top, left + wide, top + ch);
@@ -2650,15 +3551,17 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         long up = SystemClock.uptimeMillis();
         float e = bgFadeAt == 0 ? 1 : fadeEase(bgFadeAt, up);
         boolean fading = bgFadeAt != 0;
-        // Drawer open: the background lightens (by day) or darkens (at night), as a filter on the drawing itself.
-        android.graphics.ColorFilter v = veil(tone(0.32f, 0.42f) * Ui.clamp(drawer.value), blend(0xFFFFFFFF, 0xFF000000, night));
+        // Darken the selected Skyline gently behind the approved light control/calendar glass.
+        boolean controls=HomeControls.enabled();
+        android.graphics.ColorFilter v = veil((controls?0.45f:tone(0.32f,0.42f))*Ui.clamp(drawer.value),
+                controls?0xFF151820:blend(0xFFFFFFFF,0xFF000000,night));
         if (bgTo == null || (fading && bgFrom == null)) {
             if (lightGradient == null) lightGradient = new LinearGradient(0, 0, 0, h, 0xFFF5F5F7, 0xFFE2E2E7, Shader.TileMode.CLAMP);
             if (nightGradient == null) nightGradient = new LinearGradient(0, 0, 0, h, 0xFF1C1C1E, 0xFF0B0B0D, Shader.TileMode.CLAMP);
             fill.setColorFilter(v);
             fill.setColor(0xFF000000);
             if (night < 0.999f) {
-                fill.setShader(lightGradient);
+                fill.setShader(Cinema.enabled() ? nightGradient : lightGradient);
                 c.drawRect(screen, fill);
             }
             if (night > 0.001f) {
@@ -2674,14 +3577,22 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         if (fading && bgFrom != null) drawLightImage(c, bgFrom, bgTo == null ? 1 - e : 1);
         if (bgTo != null) drawLightImage(c, bgTo, fading ? e : 1);
         imagePaint.setColorFilter(null);
+        float rowShade=0.65f*Ui.clamp(recentScroll.value)+0.1f*Ui.clamp(recentScroll.value-1);
+        if(controls)rowShade*=1-Ui.clamp(drawer.value);
+        if(rowShade>0.001f) {
+            fill.setShader(null); fill.setColorFilter(null); fill.setColor(Ui.alpha(0xFF000000,rowShade));
+            c.drawRect(screen,fill);
+        }
     }
 
     private void drawLightImage(Canvas c, Backdrop b, float alpha) {
+        if (b.image!=null) { drawImage(c,b.image,alpha); return; }
         if (night < 0.999f || b.nightImage == null) drawImage(c, b.lightImage, alpha);
         if (night > 0.001f) drawImage(c, b.nightImage, alpha * night);
     }
 
     private void drawLightTop(Canvas c) {
+        if (Cinema.enabled()) { cinemaHero.draw(c,!sheetOpen && zone==Z_CINEMA?cinemaButton:-1); return; }
         applyTone();
         if (!picksOn()) {
             drawClock(c);
@@ -2812,40 +3723,139 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         }
     }
 
-    /**
-     * Live TV, HDMI Inputs and Settings: icon-only glass circles (light by day, smoked at night); the focused one turns
-     * white with a dark icon (the tvOS focus) and its name appears below it.
-     */
+    /** White corner icons are transparent at rest and share the shelf's glass focus style. */
     private void drawLightButtons(Canvas c) {
         applyTone();
-        for (int i = 0; i < 3; i++) {
+        if(HomeClimate.enabled()) calendarVisual.summaryLeft(c,MARGIN*k,180*k);
+        if(HomeClimate.enabled() && !lightButtons.isEmpty()) {
+            RectF firstShortcut=topRects[3];
+            indoorClimateRow.right(c,firstShortcut.left-32*k,firstShortcut.centerY(),homeClimate);
+        }
+        if (Cinema.enabled()) {
+            c.drawText(dateText,MARGIN*k,78*k,cinemaDatePaint);
+            HomeData.Weather weather=data.weather;
+            boolean hasWeather=!Double.isNaN(weather.temp);
+            c.drawText(clockText,(MARGIN+(hasWeather?68:0))*k,136*k,cinemaClockPaint);
+            if (hasWeather) {
+                float iconX=(MARGIN+26)*k;
+                Symbols.draw(getContext(),c,Symbols.weather(weather.code,weather.isDay),iconX,120*k,42*k,0xFFFFFFFF);
+            }
+        }
+        for (int i = 0; i < lightButtons.size(); i++) {
             RectF r = topRects[3 + i];
-            float f = Ui.clamp(topFocus[3 + i].value), s = 1 + 0.1f * f, rad = r.width() / 2 * s;
+            float f = Ui.clamp(topFocus[3 + i].value), s = 1 + 0.04f * f, rad = r.width() / 2 * s;
             cell.set(r.centerX() - rad, r.centerY() - rad, r.centerX() + rad, r.centerY() + rad);
-            tmp.set(cell);
-            tmp.offset(0, (6 + 8 * f) * k);
-            shadow.setColor(Ui.alpha(0xFF000000, tone(0.1f, 0.3f) + tone(0.14f, 0.2f) * f));
-            shadows.draw(c, tmp, rad, SHADOW_BLUR * k, shadow);
-            scene.liquid(c, cell, rad, tone(0xFFFFFFFF, SMOKE), tone(0.55f, 0.5f), tone(0.02f, 0.01f), 12 * k, 8 * k,
-                    tone(0.6f, 0.45f), 1 - f);
-            if (f > 0.01f) {
-                fill.setShader(null);
-                fill.setColor(Ui.alpha(0xFFFFFFFF, f));
-                c.drawCircle(cell.centerX(), cell.centerY(), rad, fill);
-            }
-            Symbols.draw(getContext(), c, lightButtons.get(i).symbol, cell.centerX(), cell.centerY(), 27 * k * s,
-                    blend(tone(L_INK, 0xEBFFFFFF), L_INK, f));
-            if (f > 0.01f) {
-                String label = lightButtons.get(i).label;
-                float half = lTip.measureText(label) / 2;
-                float x = Math.min(r.centerX(), CONTENT_R * k - half);
-                lTip.setAlpha(Math.round(255 * f));
-                c.drawText(label, x, r.bottom + (40 + 4 * f) * k, lTip);
-            }
+            if (f > 0.01f) drawGlassFocus(c,cell,14*k,f);
+            if(lightButtons.get(i).kind==HomeApps.HOME_ASSISTANT) {
+                int size=Math.round(30*k*s);
+                assistantIcon.setBounds(Math.round(cell.centerX())-size/2,Math.round(cell.centerY())-size/2,Math.round(cell.centerX())-size/2+size,Math.round(cell.centerY())-size/2+size);
+                assistantIcon.draw(c);
+            } else if(lightButtons.get(i).kind==HomeApps.TOOLS) {
+                ToolsDialog.drawWrench(c,cell.centerX(),cell.centerY(),28*k*s,0xFFFFFFFF);
+            } else Symbols.draw(getContext(), c, lightButtons.get(i).symbol, cell.centerX(), cell.centerY(), 26 * k * s,0xFFFFFFFF);
         }
     }
 
+    private void updateExperiences(){
+        experienceIndex=Math.max(0,Math.min(experienceIndex,experienceBoard.data.items.size()-1));
+        if(zone==Z_BOARD && experienceBoard.data.items.isEmpty())zone=Z_BOARD_BLOCK;
+        experienceBoard.photos.changed=()->{experienceLayer.invalidate();wake();};
+        experienceBoard.photos.refresh(experienceBoard.album(),running && hasWindowFocus() && !drawerOpen && !sheetOpen && (zone==Z_BOARD || zone==Z_BOARD_BLOCK));
+        experienceBoard.update(k,experienceIndex,eventTab);
+        if(k>0 && experienceLayer.getMeasuredWidth()>0)place(experienceLayer,0,Math.round((experienceBoard.top()-60)*k));
+        experienceLayer.invalidate();wake();spoken.focusMoved();
+    }
     private boolean moveLight(int dx, int dy) {
+        if(!sheetOpen && (zone==Z_BOARD || zone==Z_BOARD_HEADER || zone==Z_BOARD_BLOCK)){
+            if(zone==Z_BOARD_BLOCK){
+                if(dy<0)zone=eventResults.isEmpty()?Z_EVENT_TABS:Z_EVENTS;
+                else if(dy>0){if(!drawerItems.isEmpty())openDrawer();}
+                else if(dx>0)zone=Z_BOARD_HEADER;
+            }else if(zone==Z_BOARD_HEADER){
+                if(dy<0)zone=Z_EVENT_TABS;
+                else if(dy>0 || dx<0)zone=Z_BOARD_BLOCK;
+            }else{
+                int next=ExperienceData.navigate(experienceIndex,dx,dy,experienceBoard.data.items.size());
+                if(next>=0)experienceIndex=next;
+                else zone=Z_BOARD_BLOCK;
+            }
+            retarget(false);click.move();return true;
+        }
+        if(!sheetOpen && (zone==Z_EVENT_TABS || zone==Z_EVENTS)) {
+            if(zone==Z_EVENT_TABS) {
+                if(dx!=0) {
+                    eventHeader=Math.max(0,Math.min(4,eventHeader+dx));
+                    if(eventHeader<4 && eventTab!=eventHeader) { eventTab=eventHeader; eventIndex=0; eventSelectedId=""; }
+                } else if(dy<0) zone=JellyfinRecent.enabled()?Z_RECENT:Z_INTERESTS;
+                else if(dy>0) { zone=!eventResults.isEmpty()?Z_EVENTS:Z_BOARD_BLOCK; }
+            } else {
+                if(dx!=0) {
+                    eventIndex=eventPanel.horizontal(dx);
+                    eventSelectedId="";
+                } else if(dy!=0) {
+                    int next=eventPanel.vertical(dy);
+                    if(next>=0) {eventIndex=next;eventSelectedId="";}
+                    else if(next==-1)zone=Z_EVENT_TABS;
+                    else zone=Z_BOARD_BLOCK;
+                }
+            }
+            retarget(false); click.move(); return true;
+        }
+        if(HomeControls.enabled() && !sheetOpen && (zone==Z_AGENDA || zone==Z_DRAWER && dy>0)) {
+            if(zone==Z_AGENDA) {
+                java.time.YearMonth month=calendarVisual.navigation.month();
+                if(!calendarVisual.move(dx,dy))zone=Z_DRAWER;
+                else if(!month.equals(calendarVisual.navigation.month()))requestAgendaMonth();
+                drawerDirty=true;
+            } else if(!coverEditing) {zone=Z_AGENDA;requestAgendaMonth();}
+            else return false;
+            retarget(false); click.move(); return true;
+        }
+        if(zone==Z_INTERESTS) {
+            if(dx!=0) {
+                interestIndex=Math.max(0,Math.min(2,interestIndex+dx)); interestProgramme=interests.items.get(interestIndex).programme;
+            } else if(dy<0) zone=JellyfinRecent.enabled()?Z_CONTINUING:Z_SHELF;
+            else if(dy>0) {
+                if(JellyfinRecent.enabled()) { zone=Z_RECENT; recent.refresh(); }
+                else { zone=Z_EVENT_TABS; events.refresh(); }
+            }
+            retarget(false); click.move(); return true;
+        }
+        if(JellyfinRecent.enabled() && zone==Z_CONTINUING) {
+            if(dx!=0) continueIndex=Math.max(0,Math.min(RecentRow.visibleCount(continuing.items.size())-1,continueIndex+dx));
+            else if(dy<0) zone=Z_SHELF;
+            else if(dy>0) { zone=Z_INTERESTS; interests.refresh(); }
+            retarget(false); click.move(); return true;
+        }
+        if(JellyfinRecent.enabled() && zone==Z_RECENT) {
+            if(dx!=0) recentIndex=Math.max(0,Math.min(RecentRow.visibleCount(recent.items.size())-1,recentIndex+dx));
+            else if(dy<0) zone=Z_INTERESTS;
+            else if(dy>0) { zone=Z_EVENT_TABS; events.refresh(); }
+            retarget(false); click.move(); return true;
+        }
+        if(JellyfinRecent.enabled() && zone==Z_SHELF && dy>0) {
+            zone=Z_CONTINUING; continuing.refresh(); retarget(false); click.move(); return true;
+        }
+        if(!JellyfinRecent.enabled() && zone==Z_SHELF && dy>0) {
+            zone=Z_INTERESTS; interests.refresh(); retarget(false); click.move(); return true;
+        }
+        if (Cinema.enabled()) {
+            if (zone==Z_CINEMA_MOVIES) {
+                if (dx!=0) browseCinema(dx);
+                else if (dy<0) { zone=Z_TOP; topIndex=3; }
+                else if (dy>0) { zone=Z_CINEMA; cinemaButton=cinemaHero.firstButton(); }
+            } else if (zone==Z_SHELF && dy<0) {
+                zone=Z_CINEMA; cinemaButton=cinemaHero.firstButton();
+            } else if (zone==Z_CINEMA) {
+                if (dx!=0) cinemaButton=Math.max(cinemaHero.firstButton(),Math.min(cinemaHero.lastButton(),cinemaButton+dx));
+                else if (dy<0) zone=Z_CINEMA_MOVIES;
+                else if (dy>0) zone=Z_SHELF;
+            } else if (zone==Z_TOP) {
+                if (dx!=0) topIndex=Math.max(3,Math.min(2+lightButtons.size(),topIndex+dx));
+                else if (dy>0) zone=Z_CINEMA_MOVIES;
+            } else return false;
+            retarget(false); click.move(); return true;
+        }
         switch (zone) {
             case Z_SHELF:
                 // Up from an empty shelf too: move()'s older zones (the hero, the corner capsule) aren't drawn any more.
@@ -2873,7 +3883,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 break;
             case Z_TOP:
                 if (dx != 0) {
-                    int next = Math.max(picksOn() ? 0 : 3, Math.min(5, topIndex + dx));
+                    int next = Math.max(picksOn() ? 0 : 3, Math.min(2+lightButtons.size(), topIndex + dx));
                     if (next == topIndex) return true;
                     topIndex = next;
                     if (topIndex < 3) selectTab(topIndex);   // like Apple TV tabs: focusing a tab selects it

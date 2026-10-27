@@ -37,6 +37,9 @@ final class Spoken extends AccessibilityNodeProvider {
         void click(int id);
         /** False for what is only there to be read (a widget): it takes the focus, so TalkBack gets to it, but OK does nothing. */
         default boolean clickable(int id) { return true; }
+        /** Optional percentage control, exposed to screen readers as a SeekBar. */
+        default int progress(int id) { return -1; }
+        default boolean setProgress(int id,int value) { return false; }
     }
 
     /** TalkBack's click and the remote's OK can both arrive for one press: only the first counts. */
@@ -102,6 +105,14 @@ final class Spoken extends AccessibilityNodeProvider {
         AccessibilityNodeInfo info = AccessibilityNodeInfo.obtain(host, id);
         info.setPackageName(host.getContext().getPackageName());
         info.setClassName(clickable ? Button.class.getName() : TextView.class.getName());
+        int progress=source.progress(id);
+        if(progress>=0) {
+            info.setClassName("android.widget.SeekBar");
+            info.setRangeInfo(AccessibilityNodeInfo.RangeInfo.obtain(AccessibilityNodeInfo.RangeInfo.RANGE_TYPE_INT,0,100,progress));
+            info.addAction(AccessibilityAction.ACTION_SET_PROGRESS);
+            info.addAction(AccessibilityAction.ACTION_SCROLL_FORWARD);
+            info.addAction(AccessibilityAction.ACTION_SCROLL_BACKWARD);
+        }
         info.setParent(host);
         info.setText(text);
         info.setBoundsInParent(bounds);
@@ -124,6 +135,16 @@ final class Spoken extends AccessibilityNodeProvider {
 
     @Override public boolean performAction(int id, int action, Bundle arguments) {
         if (id == HOST_VIEW_ID) return host.performAccessibilityAction(action, arguments);
+        int progress=source.progress(id);
+        if(progress>=0 && (action==AccessibilityNodeInfo.ACTION_SCROLL_FORWARD || action==AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+                || action==AccessibilityAction.ACTION_SET_PROGRESS.getId())) {
+            float value=action==AccessibilityNodeInfo.ACTION_SCROLL_FORWARD?Math.min(100,progress+5):Math.max(0,progress-5);
+            if(action==AccessibilityAction.ACTION_SET_PROGRESS.getId()) {
+                if(arguments==null || !arguments.containsKey(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE)) return false;
+                value=arguments.getFloat(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE);
+            }
+            return !Float.isNaN(value) && !Float.isInfinite(value) && value>=0 && value<=100 && source.setProgress(id,Math.round(value));
+        }
         if (action == AccessibilityNodeInfo.ACTION_CLICK && !source.clickable(id)) return false;
         switch (action) {
             case AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS:

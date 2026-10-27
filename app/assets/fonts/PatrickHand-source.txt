@@ -1,0 +1,5 @@
+Patrick Hand Regular by Patrick Wagesreiter.
+Source: https://github.com/google/fonts/tree/main/ofl/patrickhand
+Downloaded 2026-10-24 from google/fonts main.
+Licensed under the SIL Open Font License 1.1; see PatrickHand-OFL.txt.
+Used for the experience chalkboard; the slate texture is drawn locally.

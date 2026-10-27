@@ -1,0 +1,5 @@
+Home Assistant logo supplied by the user as a transparent 480 x 480 PNG.
+Stored unchanged in res/drawable-nodpi/handroid_icon.png.
+Android scales it proportionally to the notification's 48 px icon slot at 1920-wide coordinates,
+preserving alpha; the notification renders the logo white. Also used as the foreground-service icon.
+Replaces the previous Material Design Icons home-assistant symbol.

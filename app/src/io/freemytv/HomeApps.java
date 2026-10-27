@@ -57,6 +57,8 @@ final class HomeApps {
     static final int APP = 0, LIVE_TV = 1, INPUT = 2, ALL_APPS = 3, SETTINGS = 4, ANDROID_SETTINGS = 5;
     /** The "HDMI Inputs" button: opens the bottom drawer on the inputs (the home screen handles it). */
     static final int INPUTS = 7;
+    static final int HOME_ASSISTANT = 9;
+    static final int TOOLS = 10;
     /** Image size of each card (16:9; on screen it shows up to ~330 px wide). */
     static final int TILE_W = 384, TILE_H = 216;
 
@@ -68,6 +70,8 @@ final class HomeApps {
         Bitmap tile;        // 16:9 card (apps and specials)
         Bitmap logo;        // colored logo with no background (shelf); null = use the card
         Bitmap logoDark;    // version for a light background (YouTube's white icon), if any
+        Bitmap shelfIcon;   // white app icon, loaded off the UI thread
+        String shelfLabel;  // fitted name under the shelf icon
         float logoInk;      // fraction of the logo with ink (thin logos are drawn larger, with the same "weight")
         float logoScale = 1; // size tweak by eye (compact logos need more)
         boolean connected = true;
@@ -119,10 +123,7 @@ final class HomeApps {
     private static final Map<String, Bitmap> TILES = new HashMap<>();   // key → ready card
     private static final Map<String, Bitmap> LOGOS = new HashMap<>();   // key → colored logo with no background
 
-    /**
-     * Home screen apps. `extract`: also lifts the logos that are not on disk yet (slow: background only); without it,
-     * those apps keep their TV art until the next load.
-     */
+    /** Home screen apps. `extract` prepares missing white icons in the background. */
     static List<Item> shelf(Context c, boolean extract) {
         List<Item> items = new ArrayList<>();
         PackageManager pm = c.getPackageManager();
@@ -136,19 +137,14 @@ final class HomeApps {
             it.kind = APP;
             it.pkg = pkg;
             if (d == null) {
-                // An app picked in Settings > Shelf that isn't in SHELF: its own name and TV art.
+                // An app picked in Settings > Shelf that isn't in the default list.
                 it.key = pkg;
                 it.label = ri != null ? String.valueOf(ri.loadLabel(pm)) : pkg;
-                it.tile = appTile(c, null, pkg, 0);
             } else {
                 it.key = d[0];
                 it.label = d[1];
-                it.logo = shelfLogo(c, d[0], d[2], d[4], extract);
-                if (it.logo == null) it.tile = appTile(c, d[0], d[2], 0xFF000000 | Integer.parseInt(d[3], 16));
-                if (it.logo != null) it.logoInk = ink(it.logo);
-                it.logoDark = ownLogoCached(c, d[0] + "-dark");
-                it.logoScale = Float.parseFloat(d[5]);
             }
+            it.shelfIcon=ShelfIcons.get(c,pkg,extract);
             items.add(it);
         }
         return items;
@@ -169,15 +165,15 @@ final class HomeApps {
         return out;
     }
 
-    /** Every app the shelf could hold, as {package, name}: the ones from SHELF first, then the other TV apps by name. */
+    /** Every launchable app, as {package, name}: the defaults first, then the rest by name. */
     static List<String[]> shelfCandidates(Context c) {
         PackageManager pm = c.getPackageManager();
         List<String[]> out = new ArrayList<>();
         Set<String> seen = new HashSet<>();
         for (String[] d : SHELF) if (launchIntent(pm, d[2]) != null && seen.add(d[2])) out.add(new String[] {d[2], d[1]});
         List<String[]> more = new ArrayList<>();
-        for (String[] app : launchable(c)) {
-            if (app[0].equals(c.getPackageName()) || HIDDEN.contains(app[0]) || !seen.add(app[0])) continue;
+        for (String[] app : launchable(c, true)) {
+            if (!seen.add(app[0])) continue;
             more.add(app);
         }
         Collections.sort(more, (a, b) -> a[1].toLowerCase(Locale.ROOT).compareTo(b[1].toLowerCase(Locale.ROOT)));
@@ -463,6 +459,11 @@ final class HomeApps {
     }
 
     static List<String[]> launchable(Context c) {
+        return launchable(c, false);
+    }
+
+    /** The shelf picker also includes system apps with a standard launcher entry. */
+    private static List<String[]> launchable(Context c, boolean includeSystem) {
         PackageManager pm = c.getPackageManager();
         List<String[]> out = new ArrayList<>();
         Set<String> seen = new HashSet<>();
@@ -474,7 +475,8 @@ final class HomeApps {
         Intent phone = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
         for (ResolveInfo ri : pm.queryIntentActivities(phone, 0)) {
             String pkg = ri.activityInfo.packageName;
-            if ((ri.activityInfo.applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0 || !seen.add(pkg)) continue;
+            if ((!includeSystem && (ri.activityInfo.applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0)
+                    || !seen.add(pkg)) continue;
             out.add(new String[] {pkg, String.valueOf(ri.loadLabel(pm))});
         }
         return out;

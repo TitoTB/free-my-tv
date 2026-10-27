@@ -62,6 +62,15 @@ final class Backdrop {
         nightImage = night == null ? null : Bitmap.createBitmap(night, FW, FH, Bitmap.Config.ARGB_8888);
     }
 
+    /** The screensaver's selected landscape, sharp and without the cinema's title scrims. */
+    static Backdrop landscape(java.io.File file) throws java.io.IOException {
+        Bitmap[] photos=photo(file,W,H,null);
+        photos[1].recycle();
+        Bitmap out=photos[0];
+        int[] frost=reduce(out,FW,FH,3,3),glass=reduce(out,GW,GH,2,2);
+        return new Backdrop(gpu(out),frost,glass,null,null,null,null,null,null);
+    }
+
     static Backdrop make(Bitmap src, boolean forLight) {
         Bitmap out = Bitmap.createBitmap(W, H, Bitmap.Config.ARGB_8888);
         Canvas c = new Canvas(out);
@@ -108,6 +117,30 @@ final class Backdrop {
         int[] frost = reduce(out, FW, FH, 3, 3);
         int[] glass = reduce(out, GW, GH, 2, 2);
         return new Backdrop(gpu(out), frost, glass, null, null, null, null, null, null);
+    }
+
+    /** Cache a sharp full-screen crop of the original poster; make() applies the standard backdrop scrims. */
+    static void poster(java.io.File source,java.io.File destination) throws java.io.IOException {
+        android.graphics.BitmapFactory.Options options=new android.graphics.BitmapFactory.Options();
+        options.inJustDecodeBounds=true; android.graphics.BitmapFactory.decodeFile(source.getPath(),options);
+        if(options.outWidth<=0 || options.outHeight<=0) throw new java.io.IOException("Invalid poster");
+        options.inSampleSize=1;
+        while(options.outWidth/options.inSampleSize>W || options.outHeight/options.inSampleSize>H*2) options.inSampleSize*=2;
+        options.inJustDecodeBounds=false;
+        Bitmap poster=android.graphics.BitmapFactory.decodeFile(source.getPath(),options);
+        if(poster==null) throw new java.io.IOException("Invalid poster");
+        Bitmap out=null;
+        try {
+            Paint paint=new Paint(Paint.FILTER_BITMAP_FLAG|Paint.DITHER_FLAG);
+            out=Bitmap.createBitmap(W,H,Bitmap.Config.ARGB_8888); Canvas canvas=new Canvas(out);
+            float[] b=CinemaPoster.bounds(poster.getWidth(),poster.getHeight(),W,H);
+            canvas.drawBitmap(poster,null,new RectF(b[0],b[1],b[2],b[3]),paint);
+            try(java.io.OutputStream stream=new java.io.FileOutputStream(destination)) {
+                if(!out.compress(Bitmap.CompressFormat.JPEG,92,stream)) throw new java.io.IOException("Poster composition");
+            }
+        } finally {
+            poster.recycle(); if(out!=null) out.recycle();
+        }
     }
 
     /** How many times smaller the screensaver photo's frosted version is (the glass math uses the same number). */

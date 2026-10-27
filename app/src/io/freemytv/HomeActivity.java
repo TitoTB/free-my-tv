@@ -41,6 +41,8 @@ public class HomeActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
+        HandroidService.state(this,HandroidService.HOME,true);
+        TrailerReturn.clear(this);
         if (prefsVersion != Prefs.version) {
             prefsVersion = Prefs.version;
             HomeData.get(this).settingsChanged();
@@ -48,9 +50,20 @@ public class HomeActivity extends Activity {
             return;
         }
         if (home != null) home.resume();
+        if(home!=null && JellyfinRecent.enabled() && checkSelfPermission("android.permission.READ_TV_LISTINGS")!=android.content.pm.PackageManager.PERMISSION_GRANTED
+                && !getSharedPreferences("home-ui",MODE_PRIVATE).getBoolean("watch-next-permission-asked",false)) {
+            getSharedPreferences("home-ui",MODE_PRIVATE).edit().putBoolean("watch-next-permission-asked",true).apply();
+            requestPermissions(new String[]{"android.permission.READ_TV_LISTINGS"},72);
+        }
+    }
+
+    @Override public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] results) {
+        super.onRequestPermissionsResult(requestCode,permissions,results);
+        if(requestCode==72) JellyfinRecent.getContinue(this).refreshProgress();
     }
 
     @Override protected void onPause() {
+        HandroidService.state(this,HandroidService.HOME,false);
         if (home != null) home.pause();
         super.onPause();
     }

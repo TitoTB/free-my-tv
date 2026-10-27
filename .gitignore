@@ -13,3 +13,24 @@ __pycache__/
 # macOS
 .DS_Store
 tools/.i18n-cache.json
+
+# Community checkout: local credentials, device QA and generated releases
+releases/
+.tools/
+device-backups/
+output/
+*.jks
+*.p12
+*.pfx
+*.pem
+*.key
+*.har
+*.log
+*.mp4
+*.webm
+*.mp3
+.env
+.env.*
+config.*.properties
+!config.example.properties
+.pytest_cache/

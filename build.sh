@@ -3,6 +3,10 @@
 # Needs a JDK (17+) and the Android SDK command-line tools (build-tools 34+, platform android-34). See README.md.
 set -euo pipefail
 cd "$(dirname "$0")"
+NO_SECRETS=true
+if [ "${1:-}" = "--personal" ]; then NO_SECRETS=false
+elif [ -n "${1:-}" ] && [ "${1:-}" != "--no-secrets" ]; then echo "Usage: ./build.sh [--no-secrets|--personal]" >&2; exit 1; fi
+if [ "$NO_SECRETS" = false ]; then echo "PRIVATE BUILD: includes your local service configuration. Do not publish this APK." >&2; fi
 
 # --- Tools
 SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
@@ -26,6 +30,8 @@ if [ ! -f config.properties ]; then
   echo "Created config.properties: add your TMDB key and your city there (optional), then build again."
 fi
 prop() {
+  # Validation build: use only public fallback values; never read private configuration values.
+  if [ "$NO_SECRETS" = true ]; then printf '%s' "$2"; return; fi
   local v
   v="$(grep -E "^[[:space:]]*$1[[:space:]]*=" config.properties | tail -1 | cut -d= -f2- || true)"
   v="$(printf '%s' "$v" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d '"\\')"
@@ -36,11 +42,33 @@ number() {
   [[ "$v" =~ ^-?[0-9]+(\.[0-9]+)?$ ]] || { echo "config.properties: $1 must be a number (got \"$v\")" >&2; exit 1; }
   printf '%s' "$v"
 }
+entity() {
+  local v; v="$(prop "$1" '')"
+  if [ -n "$v" ] && ! [[ "$v" =~ ^[a-z_]+\.[a-z0-9_]+$ ]]; then echo "Invalid Home Assistant entity setting: $1" >&2; exit 1; fi
+  local domain
+  case "$1" in
+    ha_scene_entity) domain=input_select;;
+    ha_heating_entity|ha_study_climate_entity) domain=climate;;
+    ha_cover_entity) domain=cover;;
+    ha_study_light_entity) domain=light;;
+    ha_study_fan_entity) domain=fan;;
+    ha_bedroom_entity) domain=switch;;
+    ha_washer_active_entity|ha_dishwasher_active_entity) domain=binary_sensor;;
+    *) domain=sensor;;
+  esac
+  if [ -n "$v" ] && [[ "$v" != "$domain."* ]]; then echo "Wrong entity domain for setting: $1" >&2; exit 1; fi
+  printf '%s' "$v"
+}
+
 LAT="$(number latitude 40.7128)"
 LON="$(number longitude -74.0060)"
 ASSIST=false; [ "$(prop disable_assistant false)" = "true" ] && ASSIST=true
 CRYPTO=false; [ "$(prop show_crypto true)" = "true" ] && CRYPTO=true
 ANIMATION=false; [ "$(prop hide_animation false)" = "true" ] && ANIMATION=true
+
+for setting in ha_temperature_entity ha_humidity_entity ha_scene_entity ha_heating_entity ha_cover_entity ha_study_light_entity ha_study_fan_entity ha_study_climate_entity ha_bedroom_entity ha_washer_active_entity ha_washer_remaining_entity ha_washer_progress_entity ha_dishwasher_active_entity ha_dishwasher_remaining_entity ha_dishwasher_progress_entity ha_printer_active_entity ha_printer_remaining_entity ha_printer_progress_entity; do
+  entity "$setting" >/dev/null
+done
 
 rm -rf out && mkdir -p out/gen/io/freemytv out/classes
 cat > out/gen/io/freemytv/Config.java <<EOF
@@ -51,7 +79,35 @@ final class Config {
     private Config() {}
 
     static final String TMDB_KEY = "$(prop tmdb_key '')";
+    static final String EXPERIENCE_PHOTO_ALBUM = "$(prop experience_photo_album '')";
+    static final String FANART_KEY = "$(prop fanart_key '')";
     static final String WATCHMODE_KEY = "$(prop watchmode_key '')";
+    static final String JELLYSEERR_URL = "$(prop jellyseerr_url '')";
+    static final String JELLYSEERR_KEY = "$(prop jellyseerr_key '')";
+    static final String JELLYFIN_URL = "$(prop jellyfin_url '')";
+    static final String JELLYFIN_KEY = "$(prop jellyfin_key '')";
+    static final String JELLYFIN_USER = "$(prop jellyfin_user '')";
+    static final String HOME_ASSISTANT_URL = "$(prop home_assistant_url '')";
+    static final String HOME_ASSISTANT_TOKEN = "$(prop home_assistant_token '')";
+    static final String HA_TEMPERATURE = "$(entity ha_temperature_entity)";
+    static final String HA_HUMIDITY = "$(entity ha_humidity_entity)";
+    static final String HA_SCENE = "$(entity ha_scene_entity)";
+    static final String HA_HEATING = "$(entity ha_heating_entity)";
+    static final String HA_COVER = "$(entity ha_cover_entity)";
+    static final String HA_STUDY_LIGHT = "$(entity ha_study_light_entity)";
+    static final String HA_STUDY_FAN = "$(entity ha_study_fan_entity)";
+    static final String HA_STUDY_CLIMATE = "$(entity ha_study_climate_entity)";
+    static final String HA_BEDROOM = "$(entity ha_bedroom_entity)";
+    static final String HA_WASHER_ACTIVE = "$(entity ha_washer_active_entity)";
+    static final String HA_WASHER_REMAINING = "$(entity ha_washer_remaining_entity)";
+    static final String HA_WASHER_PROGRESS = "$(entity ha_washer_progress_entity)";
+    static final String HA_DISHWASHER_ACTIVE = "$(entity ha_dishwasher_active_entity)";
+    static final String HA_DISHWASHER_REMAINING = "$(entity ha_dishwasher_remaining_entity)";
+    static final String HA_DISHWASHER_PROGRESS = "$(entity ha_dishwasher_progress_entity)";
+    static final String HA_PRINTER_ACTIVE = "$(entity ha_printer_active_entity)";
+    static final String HA_PRINTER_REMAINING = "$(entity ha_printer_remaining_entity)";
+    static final String HA_PRINTER_PROGRESS = "$(entity ha_printer_progress_entity)";
+    static final String ELEVENLABS_VOICE_ID = "$(prop elevenlabs_voice_id XrExE9yKIg1WjnnlVkGX)";
     static final String TMDB_REGION = "$(prop tmdb_region US)";
     static final String LATITUDE = "$LAT";
     static final String LONGITUDE = "$LON";
@@ -67,9 +123,25 @@ final class Config {
 EOF
 
 # --- Build
+# Per-installation HTTP opt-in. No private LAN addresses are shipped in source.
+mkdir -p out/network-res/xml
+HTTP_POLICY=out/network-res/xml/network_security_config.xml
+printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' '<network-security-config>' '  <base-config cleartextTrafficPermitted="false" />' > "$HTTP_POLICY"
+HOSTS="$(prop local_http_hosts '')"
+if [ -n "$HOSTS" ]; then
+  printf '%s\n' '  <domain-config cleartextTrafficPermitted="true">' >> "$HTTP_POLICY"
+  IFS=',' read -r -a HTTP_HOSTS <<< "$HOSTS"
+  for host in "${HTTP_HOSTS[@]}"; do
+    [[ "$host" =~ ^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$ ]] || { echo 'Invalid local_http_hosts entry' >&2; exit 1; }
+    printf '    <domain includeSubdomains="false">%s</domain>\n' "$host" >> "$HTTP_POLICY"
+  done
+  printf '%s\n' '  </domain-config>' >> "$HTTP_POLICY"
+fi
+printf '%s\n' '</network-security-config>' >> "$HTTP_POLICY"
+"$BT/aapt2" compile "$HTTP_POLICY" -o out/network.zip
 "$BT/aapt2" compile --dir app/res -o out/res.zip
 # Fonts uncompressed: Android reads them straight from the APK.
-"$BT/aapt2" link -o out/base.apk -I "$AJ" --manifest app/AndroidManifest.xml --java out/gen out/res.zip \
+"$BT/aapt2" link -o out/base.apk -I "$AJ" --manifest app/AndroidManifest.xml --java out/gen out/res.zip -R out/network.zip \
   --min-sdk-version 26 --target-sdk-version 33 -A app/assets -0 ttf
 # Windows aapt2 packs assets with backslash separators ("assets/symbols\x.png") and Android
 # cannot find them: the home screen loses its icons and fonts. Rename the zip entries to "/".
@@ -115,9 +187,27 @@ EOF
 esac
 # On Windows javac separates paths with ";", and d8 and apksigner are .bat files.
 CPSEP=:; BAT=; case "$(uname -s 2>/dev/null)" in MINGW*|MSYS*|CYGWIN*) CPSEP=";"; BAT=.bat ;; esac
-"$JAVAC" -nowarn -Xlint:-options -source 8 -target 8 -bootclasspath "$AJ$CPSEP$BT/core-lambda-stubs.jar" -classpath "$AJ" \
+MQTT_JAR=app/libs/org.eclipse.paho.client.mqttv3-1.2.5.jar
+QR_JAR=app/libs/zxing-core-3.5.3.jar
+if command -v sha256sum >/dev/null 2>&1; then
+  echo '59914287adac506a28d5e8172eed262a22605f3df4d426b9d92f41dae2448185  app/libs/org.eclipse.paho.client.mqttv3-1.2.5.jar' | sha256sum -c - >/dev/null
+  echo '8d8064c1636fdaef7189dd9055c7d59950a8940a12f2293956446ec3c109fd82  app/libs/zxing-core-3.5.3.jar' | sha256sum -c - >/dev/null
+else
+  echo '59914287adac506a28d5e8172eed262a22605f3df4d426b9d92f41dae2448185  app/libs/org.eclipse.paho.client.mqttv3-1.2.5.jar' | shasum -a 256 -c - >/dev/null
+  echo '8d8064c1636fdaef7189dd9055c7d59950a8940a12f2293956446ec3c109fd82  app/libs/zxing-core-3.5.3.jar' | shasum -a 256 -c - >/dev/null
+fi
+# D8 copies bytecode only. Paho's ResourceBundle lookups also need its Java resources at the APK root.
+(cd out && "${JAVA_HOME:+$JAVA_HOME/bin/}jar" -xf "../$MQTT_JAR" org/eclipse/paho/client/mqttv3/internal/nls META-INF/services)
+"${JAVA_HOME:+$JAVA_HOME/bin/}jar" -u -M -f out/base.apk -C out org/eclipse/paho/client/mqttv3/internal/nls
+"${JAVA_HOME:+$JAVA_HOME/bin/}jar" -u -M -f out/base.apk -C out META-INF/services
+"$JAVAC" -nowarn -Xlint:-options -source 8 -target 8 -bootclasspath "$AJ$CPSEP$BT/core-lambda-stubs.jar" -classpath "$AJ$CPSEP$MQTT_JAR$CPSEP$QR_JAR" \
   -encoding UTF-8 -d out/classes $(find app/src out/gen -name '*.java')
-"$BT/d8$BAT" --release --min-api 26 --lib "$AJ" --output out $(find out/classes -name '*.class')
+if [ -n "$BAT" ]; then
+  "${JAVA_HOME:+$JAVA_HOME/bin/}java" -cp "$BT/lib/d8.jar" com.android.tools.r8.D8 \
+    --release --min-api 26 --lib "$AJ" --output out $(find out/classes -name '*.class') "$MQTT_JAR" "$QR_JAR"
+else
+  "$BT/d8" --release --min-api 26 --lib "$AJ" --output out $(find out/classes -name '*.class') "$MQTT_JAR" "$QR_JAR"
+fi
 if command -v zip >/dev/null; then (cd out && zip -qj base.apk classes.dex)
 else "${JAVA_HOME:+$JAVA_HOME/bin/}jar" -u -M -f out/base.apk -C out classes.dex; fi # Git Bash has no zip
 "$BT/zipalign" -f -p 4 out/base.apk out/aligned.apk
@@ -127,5 +217,9 @@ if [ ! -f freemytv.keystore ]; then
   "$KEYTOOL" -genkeypair -keystore freemytv.keystore -alias freemytv -keyalg RSA -keysize 2048 -validity 20000 \
     -storepass freemytv -keypass freemytv -dname "CN=Free My TV" >/dev/null 2>&1
 fi
-"$BT/apksigner$BAT" sign --ks freemytv.keystore --ks-pass pass:freemytv --key-pass pass:freemytv --out FreeMyTV.apk out/aligned.apk
+if [ -n "$BAT" ]; then
+  "${JAVA_HOME:+$JAVA_HOME/bin/}java" -jar "$BT/lib/apksigner.jar" sign --ks freemytv.keystore --ks-pass pass:freemytv --key-pass pass:freemytv --out FreeMyTV.apk out/aligned.apk
+else
+  "$BT/apksigner" sign --ks freemytv.keystore --ks-pass pass:freemytv --key-pass pass:freemytv --out FreeMyTV.apk out/aligned.apk
+fi
 echo "Built FreeMyTV.apk ($(du -h FreeMyTV.apk | cut -f1)). Install: adb install -r FreeMyTV.apk"

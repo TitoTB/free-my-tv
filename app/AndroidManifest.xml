@@ -1,11 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="io.freemytv"
-    android:versionCode="1"
-    android:versionName="1.0">
+    android:versionCode="34"
+    android:versionName="1.33">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.READ_TV_LISTINGS" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <!-- After the TV boots (and after a TV update), checks that Free My TV mode is still as you left it. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
@@ -13,6 +17,10 @@
          returns null). The shelf and streaming apps, the live TV apps and, through the <intent>, every TV app
          (for "All Apps"). -->
     <queries>
+        <intent><action android:name="android.speech.RecognitionService" /></intent>
+        <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>
+        <package android:name="com.android.vending" />
+        <package android:name="org.jellyfin.androidtv" />
         <package android:name="com.netflix.ninja" />
         <package android:name="com.google.android.youtube.tv" />
         <package android:name="com.amazon.amazonvideo.livingroom" />
@@ -46,6 +54,7 @@
 
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <application
         android:name=".App"
@@ -53,7 +62,8 @@
         android:icon="@drawable/icon"
         android:banner="@drawable/banner"
         android:allowBackup="false"
-        android:usesCleartextTraffic="false">
+        android:usesCleartextTraffic="false"
+        android:networkSecurityConfig="@xml/network_security_config">
 
         <!-- The app's icon opens the settings (switch between Free My TV and the original home screen). -->
         <activity
@@ -123,7 +133,26 @@
             </intent-filter>
         </service>
 
+        <!-- Voice is opt-in as a system assistant; installing an update never changes the current role. -->
+        <activity android:name=".AssistActivity" android:process=":assist" android:exported="false"
+            android:launchMode="singleTop" android:taskAffinity="io.freemytv.assist" android:excludeFromRecents="true"
+            android:theme="@style/FreeMyTV.Assist" />
+        <service android:name=".AssistVoiceService" android:process=":assist" android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <intent-filter><action android:name="android.service.voice.VoiceInteractionService" /></intent-filter>
+            <meta-data android:name="android.voice_interaction" android:resource="@xml/assist_voice" />
+        </service>
+        <service android:name=".AssistSessionService" android:process=":assist" android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION" />
+        <service android:name=".AssistRecognitionService" android:process=":assist" android:exported="true"
+            android:permission="android.permission.BIND_SPEECH_RECOGNITION_SERVICE">
+            <intent-filter><action android:name="android.speech.RecognitionService" /></intent-filter>
+        </service>
+
         <!-- The switches, as background jobs in the main process. -->
+        <service android:name=".HandroidService" android:process=":handroid" android:exported="false" />
+        <activity android:name=".HandroidSettingsActivity" android:process=":handroid" android:exported="false"
+            android:screenOrientation="landscape" android:theme="@style/FreeMyTV.Home" />
         <service
             android:name=".ModeJob"
             android:exported="false"

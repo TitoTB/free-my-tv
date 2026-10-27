@@ -340,6 +340,9 @@ final class HomeMode {
             busy(c, Ui.tr("Restoring the original home screen…"));
             boolean homeOk = restoreHome(adb, home);
             restoreScreensaver(adb, s);
+            boolean voiceOk=true;
+            try { AssistRoleManager.restore(c,adb); }
+            catch (IOException voice) { voiceOk=false;AppLog.w("previous voice assistant restoration failed"); }
             try {
                 remoteService(c, adb, false);
             } catch (IOException e) {
@@ -349,11 +352,12 @@ final class HomeMode {
             s.put("mode", ORIGINAL).put("since", System.currentTimeMillis()).put("homeReverted", false)
                     .put("disabled", new JSONArray(failed)).remove("keptOff");
             save(c, s);
-            if (failed.isEmpty() && homeOk) {
+            if (failed.isEmpty() && homeOk && voiceOk) {
                 notice(c, Ui.tr("Original mode: the factory home screen, screensaver and apps are back."));
             } else {
                 List<String> problems = new ArrayList<>(failed);
                 if (!homeOk) problems.add(Ui.tr("the original home screen"));
+                if (!voiceOk) problems.add(Ui.tr("Restore previous assistant"));
                 notice(c, Ui.trf("Original mode, but I couldn't turn back on: {list}.", "list", String.join(", ", problems)));
             }
             busy(c, Ui.tr("Measuring the original home screen…"));
@@ -436,6 +440,8 @@ final class HomeMode {
                 record(adb, stillOff);
                 // The screensaver first: if that fails, the revert isn't marked done and the next try does it again.
                 restoreScreensaver(adb, s);
+                try { AssistRoleManager.restore(app,adb); }
+                catch (IOException voice) { AppLog.w("previous voice assistant restoration failed"); }
                 s.put("homeReverted", true).put("disabled", kept);
                 save(app, s);
                 notice(app, Ui.tr("Free My TV's home screen crashed 3 times in a row; I switched back to the original one."));

@@ -1,3 +1,7 @@
+# Community checkout instructions
+
+Read COMMUNITY.md first. This is a generic source fork; never copy a maintainer's local configuration, APK, signing key, private notes, screenshots or device backups here. Do not publish personal builds. Default Android builds ignore config.properties; --personal explicitly creates a sensitive APK. Entity mappings are build-time inputs and default empty. The inherited base guide below describes the original project and may differ from this branch. Do not build or install a new version unless the user requests it.
+
 # Free My TV: notes for Claude
 
 A home screen for Google TV and Android TV that replaces the stock one, plus a settings app that switches between

@@ -1,0 +1,5 @@
+<voice-interaction-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:sessionService="io.freemytv.AssistSessionService"
+    android:recognitionService="io.freemytv.AssistRecognitionService"
+    android:supportsAssist="true"
+    android:supportsLaunchVoiceAssistFromKeyguard="false" />

@@ -210,7 +210,7 @@ public class SettingsActivity extends Activity {
                         return Ui.trf("Home Screen, {mode}", "mode", value);
                     }
                     String[] names = {Ui.tr("Screensaver, preview"), Ui.tr("Home Settings"),
-                            Ui.tr("Shelf"), Ui.tr("Remote Buttons"), Ui.tr("TV Settings")};
+                            Ui.tr("Shelf"), Ui.tr("Remote Buttons"), "HAndroid TV", Ui.tr("TV Settings")};
                     return row - 1 < names.length ? names[row - 1] : "";
                 }
                 case HOME_CHOICE: {
@@ -332,7 +332,7 @@ public class SettingsActivity extends Activity {
 
         private int rowCount() {
             switch (screen) {
-                case MAIN: return 6;
+                case MAIN: return 7;
                 case HOME_CHOICE: return 2;
                 case HOME_SETTINGS: return settingLabels().length;
                 case PICKER: return Math.min(PICK_VISIBLE, pickLabels.size());
@@ -374,9 +374,9 @@ public class SettingsActivity extends Activity {
             String mode = freeActive() ? "Free My TV" : Ui.tr("Original");
             String[] labels = {Ui.tr("Home Screen"), Ui.tr("Screensaver"),
                     Ui.tr("Home Settings"), Ui.tr("Shelf"),
-                    Ui.tr("Remote Buttons"), Ui.tr("TV Settings")};
-            String[] values = {working ? "" : mode, Ui.tr("Preview"), "", "", "", ""};
-            for (int i = 0; i < 6; i++) {
+                    Ui.tr("Remote Buttons"), "HAndroid TV", Ui.tr("TV Settings")};
+            String[] values = {working ? "" : mode, Ui.tr("Preview"), "", "", "", "", ""};
+            for (int i = 0; i < 7; i++) {
                 float y = (LIST_TOP + i * (ROW_H + ROW_GAP)) * k;
                 rowRect.set(LIST_X * k, y, LIST_R * k, y + ROW_H * k);
                 float f = drawRowBackground(c, i);
@@ -403,7 +403,7 @@ public class SettingsActivity extends Activity {
                 }
             }
 
-            float y = (LIST_TOP + 6 * (ROW_H + ROW_GAP) + 20) * k;
+            float y = (LIST_TOP + 7 * (ROW_H + ROW_GAP) + 20) * k;
             String error = state.optString("error");
             if (working && busyText.equals(Ui.tr("Accept “Allow USB debugging?” on the TV (tick “Always allow”)."))) {
                 c.drawText(Ui.tr("On the TV: tick “Always allow” and press OK."),
@@ -1025,6 +1025,8 @@ public class SettingsActivity extends Activity {
                 loadApps();
                 screen = REMOTE_KEYS;
                 focus = 0;
+            } else if(focus==5) {
+                activity.startActivity(new Intent(activity,HandroidSettingsActivity.class));
             } else {
                 activity.startActivity(new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             }
