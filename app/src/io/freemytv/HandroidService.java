@@ -39,7 +39,7 @@ public class HandroidService extends Service {
     static void state(Context c,String part,boolean visible) {
         if(!enabled(c)) return;
         try { c.startForegroundService(new Intent(c,HandroidService.class).putExtra(part,visible)); }
-        catch(RuntimeException ignored) { AppLog.w("HAndroid TV: background start unavailable"); }
+        catch(RuntimeException ignored) { AppLog.w("Android TV: background start unavailable"); }
     }
     static void start(Context c) { state(c,"start",true); }
     @Override public void onCreate() {
@@ -48,10 +48,10 @@ public class HandroidService extends Service {
         Ui.init(this);
         deviceId=identity(this); base="handroid_tv/"+deviceId;
         NotificationManager manager=getSystemService(NotificationManager.class);
-        manager.createNotificationChannel(new NotificationChannel("handroid-tv","HAndroid TV",NotificationManager.IMPORTANCE_LOW));
+        manager.createNotificationChannel(new NotificationChannel("handroid-tv","Android TV",NotificationManager.IMPORTANCE_LOW));
         PendingIntent open=PendingIntent.getActivity(this,0,new Intent(this,HandroidSettingsActivity.class),PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
         startForeground(8766,new Notification.Builder(this,"handroid-tv").setSmallIcon(R.drawable.handroid_icon)
-            .setContentTitle("HAndroid TV").setContentText(Ui.tr("Home Assistant connection active")).setContentIntent(open).setOngoing(true).build());
+            .setContentTitle("Android TV").setContentText(Ui.tr("Home Assistant connection active")).setContentIntent(open).setOngoing(true).build());
         banner=new HandroidBanner(this,()->finish("acknowledged"));
         IntentFilter filter=new IntentFilter(); filter.addAction(Intent.ACTION_SCREEN_OFF); filter.addAction(Intent.ACTION_SCREEN_ON);
         registerReceiver(power,filter);

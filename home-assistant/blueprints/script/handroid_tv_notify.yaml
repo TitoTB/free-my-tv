@@ -1,5 +1,5 @@
 blueprint:
-  name: HAndroid TV · Notificación
+  name: Android TV · Notificación
   description: >-
     Envía avisos a una TV descubierta por MQTT. En la próxima versión de la app
     los críticos siempre serán persistentes. Se descartan si la TV está
@@ -9,7 +9,7 @@ blueprint:
     min_version: 2026.10.0
   input:
     tv_device:
-      name: Televisor HAndroid TV
+      name: Televisor Android TV
       selector:
         device:
           integration: mqtt
@@ -57,7 +57,7 @@ sequence:
       - condition: template
         value_template: "{{ tv_identifiers | count != 1 }}"
     then:
-      - stop: El dispositivo seleccionado no es HAndroid TV.
+      - stop: El dispositivo seleccionado no es Android TV.
         error: true
   - if:
       - condition: template

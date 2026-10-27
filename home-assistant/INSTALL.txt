@@ -1,15 +1,11 @@
-HAndroid TV ahora utiliza MQTT Discovery; ya no se instala un componente personalizado.
-Consulta README.md en esta carpeta para configurar el broker, el dispositivo y las notificaciones.
+Android TV utiliza MQTT Discovery; no se instala un componente personalizado.
 
-Estado: versión 1.11 instalada y configurada en la TV. MQTT conectado; Home Assistant detecta
-HAndroid TV con diez entidades. Avisos nativos normales/críticos comprobados visualmente.
-La plantilla de script sigue siendo opcional y no está desplegada en el servidor.
+Consulta README.md para conectar la TV, autorizar los avisos y utilizar notify.send_message.
+El nombre predeterminado del dispositivo es Android TV y puede cambiarse para cada televisor.
+Las credenciales del broker se introducen en Ajustes > Android TV > Guardar y conectar.
 
-Ejemplo de broker: broker.example.test:1883. El alias core-mosquitto es interno de Home Assistant.
-La conexión real y los avisos se han comprobado. Las credenciales se guardan por TV en
-Ajustes > HAndroid TV > Guardar y conectar; no se incluyen en la APK comunitaria.
-
-Plantilla opcional para avisos completos:
+Plantilla opcional de notificaciones:
 blueprints/script/handroid_tv_notify.yaml
 
-No se ha modificado ni borrado automáticamente ningún archivo en tu Home Assistant real.
+Los identificadores internos handroid_tv y los nombres de archivo se conservan por compatibilidad.
+Este repositorio contiene un ejemplo censurado; adapta XXXXX a tu propia instalación.

@@ -68,7 +68,7 @@ final class HandroidBanner {
         WindowManager.LayoutParams params=new WindowManager.LayoutParams(Math.round(Math.min(1000*k,context.getResources().getDisplayMetrics().widthPixels-48*k)),WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,flags,PixelFormat.TRANSLUCENT);
         int top=Math.round(64*k);
-        params.gravity=Gravity.TOP|Gravity.CENTER_HORIZONTAL; params.y=-getScreenHeight(); params.setTitle("HAndroid TV");
+        params.gravity=Gravity.TOP|Gravity.CENTER_HORIZONTAL; params.y=-getScreenHeight(); params.setTitle("Android TV");
         // Be transparent before attaching, so the first frame cannot flash at full opacity.
         root.setAlpha(0);
         windows.addView(root,params);

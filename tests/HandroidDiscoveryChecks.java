@@ -14,7 +14,7 @@ public class HandroidDiscoveryChecks {
             JSONObject c=new JSONObject(item.getValue());
             identifiers.add(c.getJSONObject("device").getJSONArray("identifiers").getString(0));
             check(unique.add(c.getString("unique_id")));
-            check(c.getJSONObject("origin").getString("name").equals("HAndroid TV"));
+            check(c.getJSONObject("origin").getString("name").equals("Android TV"));
             if(item.getKey().contains("/notify/")) {
                 check(!c.getBoolean("retain"));check(c.getInt("qos")==0);
                 check(c.getString("availability_mode").equals("all"));check(c.getJSONArray("availability").length()==2);

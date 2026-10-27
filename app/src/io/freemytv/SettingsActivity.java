@@ -210,7 +210,7 @@ public class SettingsActivity extends Activity {
                         return Ui.trf("Home Screen, {mode}", "mode", value);
                     }
                     String[] names = {Ui.tr("Screensaver, preview"), Ui.tr("Home Settings"),
-                            Ui.tr("Shelf"), Ui.tr("Remote Buttons"), "HAndroid TV", Ui.tr("TV Settings")};
+                            Ui.tr("Shelf"), Ui.tr("Remote Buttons"), "Android TV", Ui.tr("TV Settings")};
                     return row - 1 < names.length ? names[row - 1] : "";
                 }
                 case HOME_CHOICE: {
@@ -374,7 +374,7 @@ public class SettingsActivity extends Activity {
             String mode = freeActive() ? "Free My TV" : Ui.tr("Original");
             String[] labels = {Ui.tr("Home Screen"), Ui.tr("Screensaver"),
                     Ui.tr("Home Settings"), Ui.tr("Shelf"),
-                    Ui.tr("Remote Buttons"), "HAndroid TV", Ui.tr("TV Settings")};
+                    Ui.tr("Remote Buttons"), "Android TV", Ui.tr("TV Settings")};
             String[] values = {working ? "" : mode, Ui.tr("Preview"), "", "", "", "", ""};
             for (int i = 0; i < 7; i++) {
                 float y = (LIST_TOP + i * (ROW_H + ROW_GAP)) * k;

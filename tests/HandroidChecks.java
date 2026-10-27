@@ -43,6 +43,6 @@ public final class HandroidChecks {
         }
         HandroidNotice preserved=new HandroidNotice(json("unicode","critical",true).put("message","La puerta está abierta 🏠"),now);
         check(preserved.message.equals("La puerta está abierta 🏠")); check(preserved.critical());
-        System.out.println("HAndroid policy: "+checks+" checks passed");
+        System.out.println("Android TV policy: "+checks+" checks passed");
     }
 }

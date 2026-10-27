@@ -22,7 +22,7 @@ final class HandroidDiscovery {
                 key.equals("connection")?"Conexión":key.equals("screen_on")?"Pantalla":key.equals("home_visible")?"Inicio visible":key.equals("screensaver_active")?"Salvapantallas":
                 key.equals("overlay_permission")?"Permiso de avisos":key.equals("pending_notifications")?"Avisos pendientes":key.equals("active_notification")?"Aviso activo":"Estado de los avisos";
             JSONObject config=object("name",label,"unique_id","handroid_"+id+"_"+key,"device",device,
-                "availability_topic",base+"/availability","origin",object("name","HAndroid TV","sw_version",version));
+                "availability_topic",base+"/availability","origin",object("name","Android TV","sw_version",version));
             if(platform.equals("notify")) {
                 try {
                     config.put("command_topic",base+"/notify/"+key).put("qos",0).put("retain",false);

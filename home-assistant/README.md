@@ -1,22 +1,18 @@
-# HAndroid TV por MQTT
+# Android TV por MQTT
 
-La TV se registra con MQTT Discovery en la integración **MQTT** de Home Assistant. El dispositivo y el origen se
-identifican el proyecto HAndroid TV; el nombre de cada televisor lo eliges al configurar la app.
-El dispositivo local se llama **Android TV**. Ese también es el nuevo nombre predeterminado preparado en código
-para la próxima versión; los identificadores de las entidades existentes se conservan. No se instala una integración
-personalizada, HACS ni un servidor HTTP/WebSocket en la TV.
+La TV se registra con MQTT Discovery en la integración **MQTT** de Home Assistant. Su nombre
+predeterminado y el origen de Discovery son **Android TV**. Puedes elegir otro nombre para cada televisor.
+No se instala una integración personalizada, HACS ni un servidor HTTP/WebSocket en la TV.
 
-**Versión 1.11 instalada y configurada en la TV local**. Home Assistant detecta el dispositivo HAndroid TV y sus
-diez entidades MQTT. Los avisos normales/críticos se han enviado desde notify.send_message y se han comprobado
-las confirmaciones de presentación/caducidad, el icono y el foco de la tarjeta crítica sin botón adicional.
-La plantilla opcional de script está preparada en esta carpeta; no se ha desplegado en el servidor.
-Las siguientes versiones se generan/instalan solo bajo petición expresa.
+Los nombres internos `handroid_tv`, `handroid_` y las clases `Handroid*` se conservan por compatibilidad:
+son identificadores técnicos, no el nombre visible. Cambiarlos crearía entidades o dispositivos nuevos
+y rompería las automatizaciones existentes.
 
 ## Configuración
 
 1. Configura MQTT en Home Assistant y utiliza ese mismo broker desde la TV. Utiliza la dirección LAN de tu broker; `broker.example.test:1883` es solo un ejemplo.
    `core-mosquitto` solo se resuelve dentro de Home Assistant. No publiques el puerto en Internet.
-2. Tras actualizar la app, abre **Ajustes → HAndroid TV**. Introduce nombre de TV, servidor (sin `mqtt://`), puerto,
+2. Tras actualizar la app, abre **Ajustes → Android TV**. Introduce nombre de TV, servidor (sin `mqtt://`), puerto,
    usuario y contraseña. TLS permite certificados normales de confianza del sistema; no desactiva su verificación.
 3. Autoriza **Mostrar sobre otras aplicaciones** y pulsa **Guardar y conectar**. El estado debe pasar a Conectado.
    La conexión y las credenciales se guardan en los datos privados de la TV, sin recompilar una APK por casa.
@@ -26,8 +22,8 @@ Las siguientes versiones se generan/instalan solo bajo petición expresa.
 5. Cada TV conserva un UUID independiente del nombre o la IP. Repite la configuración para añadir más televisores.
    Actualizar conserva ese UUID; borrar los datos o desinstalar crea una identidad nueva.
 
-La lectura de temperatura/humedad de casa conserva su conexión REST actual. No depende de instalar el componente
-anterior. Los sensores adicionales y controles domóticos del proyecto siguen siendo futuras ampliaciones.
+La lectura de sensores, los controles y los calendarios utilizan la conexión REST de Home Assistant adaptada
+en el ejemplo. No dependen del antiguo componente personalizado.
 
 ## Envío sencillo
 
@@ -41,16 +37,16 @@ data:
   message: La lavadora ha terminado
 ```
 
-En esta TV las entidades son notify.android_tv_notificacion_normal y notify.android_tv_notificacion_critica.
-En la versión 1.11 instalada ambos avisos nativos duran ocho segundos. El cambio preparado para la próxima APK
-hace que los críticos sean siempre persistentes; bastará elegir la entidad crítica con notify.send_message.
-Los críticos son rojos y reciben foco en la tarjeta completa; se cierran pulsando OK, sin botón adicional.
+Con el nombre predeterminado se proponen `notify.android_tv_notificacion_normal` y
+`notify.android_tv_notificacion_critica`. Comprueba los identificadores que Home Assistant haya asignado.
+Los avisos críticos son rojos y persistentes: reciben el foco en la tarjeta completa y se cierran
+pulsando OK, sin botón adicional.
 
 ## Avisos completos con selector de dispositivo
 
 Opcionalmente copia [la plantilla](blueprints/script/handroid_tv_notify.yaml) a
 `/config/blueprints/script/handroid_tv/notify.yaml`. Recarga las plantillas y crea un script a partir de
-**HAndroid TV · Notificación**. Elige el dispositivo una vez y asigna un nombre al script, por ejemplo
+**Android TV · Notificación**. Elige el dispositivo una vez y asigna un nombre al script, por ejemplo
 `script.aviso_tv_salon`. No requiere reiniciar Home Assistant para cargar un componente Python.
 
 La acción del script permite mensaje, tipo (`normal`/`critical`), persistencia, duración (2–120 s) e identificador
@@ -68,15 +64,15 @@ response_variable: entrega
 ```
 
 Un aviso persistente se mantiene hasta pulsarlo; el apagado también lo elimina. Los normales persistentes conservan
-el botón Entendido; los críticos reciben foco directamente en la tarjeta. En el cambio pendiente, todos los críticos
-son persistentes aunque se envíe persistent=false. La duración solo se utiliza para avisos normales no persistentes.
+el botón Entendido; los críticos reciben foco directamente en la tarjeta y siempre son
+persistentes aunque se envíe persistent=false. La duración solo se utiliza para avisos normales no persistentes.
 El script devuelve `published` e ID al publicar, o `discarded` si el dispositivo está desconectado/apagado.
 **Publicado no significa mostrado**: se confirma por el evento `shown`. Si se pierde la conexión antes de recibir
 un evento, la entrega queda desconocida; no se reintenta automáticamente.
 
 ## Protocolo público
 
-Prefijo de cada TV: `handroid_tv/<UUID>` (el UUID aparece en Ajustes → HAndroid TV).
+Prefijo de cada TV: `handroid_tv/<UUID>` (el UUID aparece en Ajustes → Android TV).
 
 | Topic | Contenido | Retain |
 | --- | --- | --- |
@@ -84,7 +80,7 @@ Prefijo de cada TV: `handroid_tv/<UUID>` (el UUID aparece en Ajustes → HAndroi
 | `awake` | Pantalla encendida: `online` / `offline` | Sí |
 | `state` | JSON de estados de la TV | Sí |
 | `notify/normal` | Mensaje literal, ocho segundos | **No** |
-| `notify/critical` | Mensaje literal crítico, ocho segundos | **No** |
+| `notify/critical` | Mensaje literal crítico persistente | **No** |
 | `notify/set` | JSON con opciones completas | **No** |
 | `event` | Confirmaciones JSON | **No** |
 
@@ -110,7 +106,8 @@ Si utilizas ACL, el usuario de la TV necesita leer su `notify/+` y `homeassistan
 
 ## Retirar el componente antiguo
 
-Después de validar MQTT en la TV, elimina la entrada antigua **HAndroid TV** de Home Assistant, si llegó a crearse.
+Solo si instalaste el antiguo prototipo de integración personalizada, retira la entrada de ese prototipo
+después de validar MQTT. Conserva el dispositivo y la integración MQTT actuales.
 Si copiaste los archivos del prototipo, retira únicamente `/config/custom_components/handroid_tv` y reinicia HA
 cuando te convenga. No borres otras integraciones. Las automatizaciones antiguas `handroid_tv.notify` deben pasar
 al script anterior o a `notify.send_message`; la acción antigua deja de existir al retirar el componente.

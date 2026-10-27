@@ -36,7 +36,7 @@ public class HandroidSettingsActivity extends Activity {
         GradientDrawable background=new GradientDrawable(GradientDrawable.Orientation.TL_BR,new int[]{0xFF192431,0xFF080C14});
         column.setBackground(background);
         ScrollView scroll=new ScrollView(this); scroll.addView(column); setContentView(scroll);
-        text(column,"HAndroid TV",44*k);
+        text(column,"Android TV",44*k);
         text(column,Ui.tr("Set a device name and connect to the same MQTT broker as Home Assistant. Discovery is automatic."),26*k);
         HandroidMqttSettings settings=new HandroidMqttSettings(this);
         EditText name=field(column,"Device name",settings.name,k,false,false);
@@ -63,7 +63,7 @@ public class HandroidSettingsActivity extends Activity {
             try { startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:"+getPackageName()))); }
             catch(ActivityNotFoundException unavailable) { Toast.makeText(this,Ui.tr("Open the TV's app permissions to allow display over other apps."),Toast.LENGTH_LONG).show(); }
         });
-        button(column,Ui.tr("Disable HAndroid TV"),k,()->{
+        button(column,Ui.tr("Disable Android TV"),k,()->{
             File marker=new File(getFilesDir(),"handroid-enabled");
             if(marker.exists() && !marker.delete()) { toast("Couldn't save the connection setting.");return; }
             stopService(new Intent(this,HandroidService.class));toast("Disabled");

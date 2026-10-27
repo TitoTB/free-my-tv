@@ -18,7 +18,7 @@ Busca `XXXXX` en el repositorio. Son marcadores ficticios, no credenciales ni id
 
 Los dominios `.invalid` son ejemplos deliberadamente inexistentes. Si tus servidores utilizan HTTPS, no hace falta autorizar HTTP. Si necesitan HTTP, sustituye únicamente los hosts ficticios por los tuyos; no habilites HTTP para todos los destinos.
 
-Se mantienen los ajustes MQTT de HAndroid TV y la entrada de clave de ElevenLabs que ya existían en la aplicación. La clave de ElevenLabs se cifra con Android Keystore. No se añade un sistema nuevo para configurar las demás integraciones: el agente adapta el archivo local y los ejemplos del código.
+Se mantienen los ajustes MQTT de Android TV y la entrada de clave de ElevenLabs que ya existían en la aplicación. La clave de ElevenLabs se cifra con Android Keystore. No se añade un sistema nuevo para configurar las demás integraciones: el agente adapta el archivo local y los ejemplos del código.
 
 Para compilar se utilizan JDK 17 y Android SDK (build-tools 34 / android-34), siguiendo la base original. `./build.sh` utiliza tu configuración local; los valores que contengan `XXXXX` se consideran sin completar. `--no-secrets` sigue disponible para comprobaciones sin cargar valores privados. Las entidades que conservan `XXXXX` no hacen consultas ni envían órdenes. No se incluye la clave de firma del mantenedor; conserva la tuya localmente para futuras actualizaciones.
 
