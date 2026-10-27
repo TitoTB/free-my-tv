@@ -24,7 +24,7 @@ Para compilar se utilizan JDK 17 y Android SDK (build-tools 34 / android-34), si
 
 ## Privacidad
 
-El repositorio no incluye la configuración privada, APK personales, certificados de firma, capturas o respaldos del mantenedor. Tu `config.properties` tampoco debe publicarse. Un APK que generes con tus credenciales puede contenerlas: no lo compartas. El historial de Git también debe revisarse antes de publicar tus propias modificaciones.
+El repositorio no incluye la configuración privada, APK personales, certificados de firma ni respaldos del mantenedor. La captura del README se ha seleccionado expresamente para su publicación. Tu `config.properties` tampoco debe publicarse. Un APK que generes con tus credenciales puede contenerlas: no lo compartas. El historial de Git también debe revisarse antes de publicar tus propias modificaciones.
 
 Las funciones de contenido consultan sus proveedores (TMDB, Fanart.tv, Open-Meteo, cartelera, programas y agenda cultural). Las conexiones Jellyfin/Jellyseerr y Home Assistant usan los servidores que hayas indicado; MQTT usa tu broker. El collage requiere el álbum compartido que tú elijas.
 

@@ -6,6 +6,8 @@ Comparto el diseño y las funciones de mi launcher para que puedas tomarlos como
 
 Incluye estante minimalista, cartelera, Jellyfin, agenda cultural de Madrid, pizarra de experiencias, controles/calendarios de Home Assistant, notificaciones MQTT, salvapantallas y Jarvis.
 
+![Vista del launcher con cartelera de cine, información de Home Assistant y estante de aplicaciones](docs/images/launcher-home.png)
+
 ## Cómo utilizar este ejemplo
 
 1. Clona el repositorio y ábrelo con tu agente de IA.
