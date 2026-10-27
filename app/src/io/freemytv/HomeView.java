@@ -521,7 +521,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         events=CulturalEvents.get(a);
         if (Cinema.enabled()) zone=Z_CINEMA_MOVIES;
         click = new Click(a);
-        assistantIcon=a.getDrawable(R.drawable.handroid_icon).mutate();
+        assistantIcon=a.getDrawable(R.drawable.android_icon).mutate();
         ui = a.getSharedPreferences("home-ui", Context.MODE_PRIVATE);
         tvInputs = (TvInputManager) a.getSystemService(Context.TV_INPUT_SERVICE);
         setFocusable(true);

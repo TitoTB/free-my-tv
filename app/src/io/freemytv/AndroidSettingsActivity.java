@@ -13,12 +13,12 @@ import android.widget.*;
 import java.io.File;
 
 /** Per-TV credentials and explicit opt-in. Runs in the bridge process so identity preferences have one owner. */
-public class HandroidSettingsActivity extends Activity {
+public class AndroidSettingsActivity extends Activity {
     private final android.os.Handler handler=new android.os.Handler(android.os.Looper.getMainLooper());
     private TextView connection;
     private final Runnable refresh=new Runnable() {
         public void run() {
-            if(connection!=null) connection.setText(Ui.tr("Connection")+": "+Ui.tr(HandroidService.connected()?"Connected":HandroidService.enabled(HandroidSettingsActivity.this)?"Waiting for MQTT":"Disabled"));
+            if(connection!=null) connection.setText(Ui.tr("Connection")+": "+Ui.tr(AndroidService.connected()?"Connected":AndroidService.enabled(AndroidSettingsActivity.this)?"Waiting for MQTT":"Disabled"));
             handler.postDelayed(this,1000);
         }
     };
@@ -38,23 +38,23 @@ public class HandroidSettingsActivity extends Activity {
         ScrollView scroll=new ScrollView(this); scroll.addView(column); setContentView(scroll);
         text(column,"Android TV",44*k);
         text(column,Ui.tr("Set a device name and connect to the same MQTT broker as Home Assistant. Discovery is automatic."),26*k);
-        HandroidMqttSettings settings=new HandroidMqttSettings(this);
+        AndroidMqttSettings settings=new AndroidMqttSettings(this);
         EditText name=field(column,"Device name",settings.name,k,false,false);
         EditText host=field(column,"MQTT broker",settings.host,k,false,false);
         EditText port=field(column,"Port",Integer.toString(settings.port),k,false,true);
         EditText user=field(column,"MQTT username",settings.user,k,false,false);
         EditText password=field(column,"MQTT password",settings.password,k,true,false);
         CheckBox tls=new CheckBox(this);tls.setText(Ui.tr("Use TLS (normally port 8883)"));tls.setTextColor(Color.WHITE);tls.setChecked(settings.tls);column.addView(tls);
-        text(column,"ID: "+HandroidService.identity(this),22*k);
+        text(column,"ID: "+AndroidService.identity(this),22*k);
         connection=text(column,"",24*k);
         text(column,Ui.tr("Display over other apps")+": "+Ui.tr(Settings.canDrawOverlays(this)?"Allowed":"Permission required"),24*k);
         button(column,Ui.tr("Save and connect"),k,()->{
             if(!Settings.canDrawOverlays(this)) { toast("Allow display over other apps first.");return; }
             try {
-                HandroidMqttSettings.save(this,host.getText().toString(),port.getText().toString(),user.getText().toString(),password.getText().toString(),name.getText().toString(),tls.isChecked());
-                File marker=new File(getFilesDir(),"handroid-enabled");
+                AndroidMqttSettings.save(this,host.getText().toString(),port.getText().toString(),user.getText().toString(),password.getText().toString(),name.getText().toString(),tls.isChecked());
+                File marker=new File(getFilesDir(),"android-enabled");
                 if(!marker.isFile() && !marker.createNewFile()) throw new java.io.IOException();
-                stopService(new Intent(this,HandroidService.class));HandroidService.start(this);
+                stopService(new Intent(this,AndroidService.class));AndroidService.start(this);
                 toast("MQTT settings saved. Home Assistant will discover this TV when connected.");
             } catch(IllegalArgumentException invalid) { toast("Check the broker, port and device name."); }
             catch(java.io.IOException failure) { toast("Couldn't save the connection setting."); }
@@ -64,9 +64,9 @@ public class HandroidSettingsActivity extends Activity {
             catch(ActivityNotFoundException unavailable) { Toast.makeText(this,Ui.tr("Open the TV's app permissions to allow display over other apps."),Toast.LENGTH_LONG).show(); }
         });
         button(column,Ui.tr("Disable Android TV"),k,()->{
-            File marker=new File(getFilesDir(),"handroid-enabled");
+            File marker=new File(getFilesDir(),"android-enabled");
             if(marker.exists() && !marker.delete()) { toast("Couldn't save the connection setting.");return; }
-            stopService(new Intent(this,HandroidService.class));toast("Disabled");
+            stopService(new Intent(this,AndroidService.class));toast("Disabled");
         });
         text(column,Ui.tr("Messages received while the screen is off are discarded. No notification history is stored."),22*k);
     }

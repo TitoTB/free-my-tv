@@ -7,7 +7,7 @@ import java.util.concurrent.*;
 import java.util.function.Consumer;
 
 /** Outbound MQTT 3.1.1. Clean sessions, bounded volatile outbox, no offline commands or retries. */
-final class HandroidMqtt implements AutoCloseable {
+final class AndroidMqtt implements AutoCloseable {
     interface Receiver { void message(String topic,String payload,boolean retained); }
     static final class Publication {
         final String topic,payload; final boolean retain;
@@ -16,14 +16,14 @@ final class HandroidMqtt implements AutoCloseable {
     private final ArrayBlockingQueue<Publication> outbox=new ArrayBlockingQueue<>(64);
     private final String uri,user,password,id,base;
     private final Receiver receiver;
-    private final Consumer<HandroidMqtt> announce;
+    private final Consumer<AndroidMqtt> announce;
     private volatile boolean stopped,ready,rediscover;
     private volatile MqttClient client;
     private final Thread worker;
-    HandroidMqtt(String uri,String user,String password,String id,Receiver receiver,Consumer<HandroidMqtt> announce) {
-        this.uri=uri;this.user=user;this.password=password;this.id=id;this.base="handroid_tv/"+id;
+    AndroidMqtt(String uri,String user,String password,String id,Receiver receiver,Consumer<AndroidMqtt> announce) {
+        this.uri=uri;this.user=user;this.password=password;this.id=id;this.base="android_tv/"+id;
         this.receiver=receiver;this.announce=announce;
-        worker=new Thread(this::run,"handroid-mqtt");
+        worker=new Thread(this::run,"android-mqtt");
     }
     void start() { worker.start(); }
     boolean connected() { return ready; }
@@ -44,7 +44,7 @@ final class HandroidMqtt implements AutoCloseable {
         while(!stopped) {
             MqttClient c=null;
             try {
-                c=new MqttClient(uri,"handroid_"+id.replace("-",""),new MemoryPersistence()); client=c;
+                c=new MqttClient(uri,"android_"+id.replace("-",""),new MemoryPersistence()); client=c;
                 c.setTimeToWait(5000);
                 c.setCallback(new MqttCallback() {
                     public void connectionLost(Throwable cause) { ready=false;outbox.clear(); }

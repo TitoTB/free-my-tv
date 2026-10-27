@@ -2,11 +2,11 @@ package io.freemytv;
 
 import org.json.JSONObject;
 
-public final class HandroidChecks {
+public final class AndroidChecks {
     private static int checks;
     private static long now=1_000_000;
-    private static HandroidNotice notice(String id,String type,boolean persistent) throws Exception {
-        return new HandroidNotice(json(id,type,persistent),now);
+    private static AndroidNotice notice(String id,String type,boolean persistent) throws Exception {
+        return new AndroidNotice(json(id,type,persistent),now);
     }
     private static JSONObject json(String id,String type,boolean persistent) throws Exception {
         return new JSONObject().put("notification_id",id).put("notification_type",type).put("message","Mensaje de prueba")
@@ -14,8 +14,8 @@ public final class HandroidChecks {
     }
     private static void check(boolean yes) { if(!yes) throw new AssertionError("Check "+(checks+1)); checks++; }
     public static void main(String[] args) throws Exception {
-        HandroidNotice.Queue q=new HandroidNotice.Queue();
-        HandroidNotice normal=notice("normal","normal",true),critical=notice("critical","critical",false);
+        AndroidNotice.Queue q=new AndroidNotice.Queue();
+        AndroidNotice normal=notice("normal","normal",true),critical=notice("critical","critical",false);
         check(critical.persistent); // Critical severity always overrides persistent=false.
         check(!notice("temporary","normal",false).persistent);
         check(q.offer(normal,false).equals("discarded")); check(q.pending()==0);
@@ -38,10 +38,10 @@ public final class HandroidChecks {
                 json("a","normal",false).put("duration",1),json("a","normal",false).put("duration",8.5),
                 json("a","normal",false).put("duration",121),json("a","normal",false).put("expires_at",now-1),
                 json("a","normal",false).put("expires_at",now+60000),json("a","normal",false).put("message",new String(new char[501]).replace('\0','x'))}) {
-            boolean rejected=false; try { new HandroidNotice(invalid,now); } catch(IllegalArgumentException expected) { rejected=true; }
+            boolean rejected=false; try { new AndroidNotice(invalid,now); } catch(IllegalArgumentException expected) { rejected=true; }
             check(rejected);
         }
-        HandroidNotice preserved=new HandroidNotice(json("unicode","critical",true).put("message","La puerta está abierta 🏠"),now);
+        AndroidNotice preserved=new AndroidNotice(json("unicode","critical",true).put("message","La puerta está abierta 🏠"),now);
         check(preserved.message.equals("La puerta está abierta 🏠")); check(preserved.critical());
         System.out.println("Android TV policy: "+checks+" checks passed");
     }

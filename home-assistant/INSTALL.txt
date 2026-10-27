@@ -5,7 +5,6 @@ El nombre predeterminado del dispositivo es Android TV y puede cambiarse para ca
 Las credenciales del broker se introducen en Ajustes > Android TV > Guardar y conectar.
 
 Plantilla opcional de notificaciones:
-blueprints/script/handroid_tv_notify.yaml
+blueprints/script/android_tv_notify.yaml
 
-Los identificadores internos handroid_tv y los nombres de archivo se conservan por compatibilidad.
 Este repositorio contiene un ejemplo censurado; adapta XXXXX a tu propia instalación.

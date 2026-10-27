@@ -5,16 +5,16 @@ import java.util.*;
 import org.json.*;
 
 /** Host-only driver uses the exact production Paho transport and Discovery payloads. */
-public class HandroidMqttHarness {
+public class AndroidMqttHarness {
     public static void main(String[] args) throws Exception {
-        String id=args[1],base="handroid_tv/"+id;
-        HandroidMqtt mqtt=new HandroidMqtt("tcp://127.0.0.1:"+args[0],"","",id,(topic,payload,retained)->{
+        String id=args[1],base="android_tv/"+id;
+        AndroidMqtt mqtt=new AndroidMqtt("tcp://127.0.0.1:"+args[0],"","",id,(topic,payload,retained)->{
             try {
-                HandroidNotice notice=new HandroidNotice(HandroidDiscovery.command(topic,payload,System.currentTimeMillis()),System.currentTimeMillis());
-                System.out.println(HandroidDiscovery.object("received",notice.id,"message",notice.message,"type",notice.type,"persistent",notice.persistent));
+                AndroidNotice notice=new AndroidNotice(AndroidDiscovery.command(topic,payload,System.currentTimeMillis()),System.currentTimeMillis());
+                System.out.println(AndroidDiscovery.object("received",notice.id,"message",notice.message,"type",notice.type,"persistent",notice.persistent));
             } catch(IllegalArgumentException invalid) { System.out.println("{\"invalid\":true}"); }
         },transport->{
-            for(Map.Entry<String,String> config:HandroidDiscovery.configs(id,"TV de prueba","Test","Host","source").entrySet())
+            for(Map.Entry<String,String> config:AndroidDiscovery.configs(id,"TV de prueba","Test","Host","source").entrySet())
                 transport.publish(config.getKey(),config.getValue(),true);
             transport.publish(base+"/state","{\"screen_on\":true}",true);
             transport.publish(base+"/awake","online",true);

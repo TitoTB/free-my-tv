@@ -150,8 +150,8 @@
         </service>
 
         <!-- The switches, as background jobs in the main process. -->
-        <service android:name=".HandroidService" android:process=":handroid" android:exported="false" />
-        <activity android:name=".HandroidSettingsActivity" android:process=":handroid" android:exported="false"
+        <service android:name=".AndroidService" android:process=":android" android:exported="false" />
+        <activity android:name=".AndroidSettingsActivity" android:process=":android" android:exported="false"
             android:screenOrientation="landscape" android:theme="@style/FreeMyTV.Home" />
         <service
             android:name=".ModeJob"

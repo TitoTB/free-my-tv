@@ -48,7 +48,7 @@ public class AssistActivity extends Activity {
         GradientDrawable background=new GradientDrawable(GradientDrawable.Orientation.TL_BR,new int[]{0xFA202A37,0xFC101923});background.setCornerRadius(px(34));background.setStroke(px(1),0x403BA5CE);panel.setBackground(background);panel.setClipToOutline(true);
         FrameLayout.LayoutParams bounds=new FrameLayout.LayoutParams(Math.min(px(980),getResources().getDisplayMetrics().widthPixels-px(80)),px(790),Gravity.TOP|Gravity.CENTER_HORIZONTAL);bounds.topMargin=px(64);root.addView(panel,bounds);
         LinearLayout heading=new LinearLayout(this);heading.setGravity(Gravity.CENTER_VERTICAL);panel.addView(heading,new LinearLayout.LayoutParams(-1,px(56)));
-        ImageView icon=new ImageView(this);icon.setImageResource(R.drawable.handroid_icon);icon.setColorFilter(Color.WHITE);icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);heading.addView(icon,new LinearLayout.LayoutParams(px(40),px(40)));
+        ImageView icon=new ImageView(this);icon.setImageResource(R.drawable.android_icon);icon.setColorFilter(Color.WHITE);icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);heading.addView(icon,new LinearLayout.LayoutParams(px(40),px(40)));
         TextView title=text("Jarvis",32,true);LinearLayout.LayoutParams titleSize=new LinearLayout.LayoutParams(0,-2,1);titleSize.leftMargin=px(18);heading.addView(title,titleSize);
         speaker=iconButton("speaker",Ui.tr("Read responses aloud"));heading.addView(speaker,new LinearLayout.LayoutParams(px(56),px(56)));
         speaker.setOnClickListener(v->aloud.setChecked(!aloud.isChecked()));

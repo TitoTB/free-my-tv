@@ -97,9 +97,11 @@ def monitor(port):
 @contextmanager
 def tv(port, identity='living-room'):
     java = os.environ.get('JAVA', str(ROOT/'.tools/jdk/jdk-17.0.20.1+1/bin/java.exe'))
-    cp = os.pathsep.join(str(ROOT/p) for p in ['.tools/source-check/classes', '.tools/json-tests.jar',
-                         'free-my-tv/app/libs/org.eclipse.paho.client.mqttv3-1.2.5.jar'])
-    proc = subprocess.Popen([java, '-Dfile.encoding=UTF-8', '-cp', cp, 'io.freemytv.HandroidMqttHarness', str(port), identity],
+    repo = Path(__file__).resolve().parents[1]
+    classes = os.environ.get('ANDROID_TV_TEST_CLASSES', str(ROOT/'.tools/source-check/classes'))
+    cp = os.pathsep.join([classes, str(ROOT/'.tools/json-tests.jar'),
+                         str(repo/'app/libs/org.eclipse.paho.client.mqttv3-1.2.5.jar')])
+    proc = subprocess.Popen([java, '-Dfile.encoding=UTF-8', '-cp', cp, 'io.freemytv.AndroidMqttHarness', str(port), identity],
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             text=True, encoding='utf-8')
     lines = queue.Queue()
@@ -134,16 +136,16 @@ def test_discovery_groups_entities_and_reannounces_after_ha_restart(broker):
 
 def test_native_notify_and_rich_persistent_command(broker):
     with monitor(broker) as m, tv(broker) as (_, lines):
-        m.publish('handroid_tv/living-room/notify/normal', '{Mensaje literal} 🏠')
+        m.publish('android_tv/living-room/notify/normal', '{Mensaje literal} 🏠')
         normal = lines.get(timeout=5)
         assert normal['message'] == '{Mensaje literal} 🏠' and normal['type'] == 'normal'
-        m.publish('handroid_tv/living-room/notify/critical', 'Alerta')
+        m.publish('android_tv/living-room/notify/critical', 'Alerta')
         critical = lines.get(timeout=5)
         assert critical['type'] == 'critical' and critical['persistent'] is True
-        m.publish('handroid_tv/living-room/notify/set', json.dumps({'message': 'Critical override', 'persistent': False,
+        m.publish('android_tv/living-room/notify/set', json.dumps({'message': 'Critical override', 'persistent': False,
                   'notification_type': 'critical'}))
         assert lines.get(timeout=5)['persistent'] is True
-        m.publish('handroid_tv/living-room/notify/set', json.dumps({'message': 'Puerta', 'persistent': True,
+        m.publish('android_tv/living-room/notify/set', json.dumps({'message': 'Puerta', 'persistent': True,
                   'notification_type': 'critical', 'notification_id': 'door'}))
         rich = lines.get(timeout=5)
         assert rich['persistent'] and rich['received'] == 'door' and rich['type'] == 'critical'
@@ -151,11 +153,11 @@ def test_native_notify_and_rich_persistent_command(broker):
 
 def test_retained_commands_are_ignored_on_subscription(broker):
     with monitor(broker) as m:
-        m.publish('handroid_tv/living-room/notify/normal', 'NO REPLAY', retain=True)
+        m.publish('android_tv/living-room/notify/normal', 'NO REPLAY', retain=True)
         with tv(broker) as (_, lines):
             with pytest.raises(queue.Empty):
                 lines.get(timeout=.7)
-            m.publish('handroid_tv/living-room/notify/normal', 'Live')
+            m.publish('android_tv/living-room/notify/normal', 'Live')
             assert lines.get(timeout=5)['message'] == 'Live'
 
 
@@ -163,21 +165,21 @@ def test_offline_send_is_not_replayed_in_clean_session(broker):
     with monitor(broker) as m:
         with tv(broker):
             pass
-        m.publish('handroid_tv/living-room/notify/normal', 'Offline', qos=1)
+        m.publish('android_tv/living-room/notify/normal', 'Offline', qos=1)
         with tv(broker) as (_, lines):
             with pytest.raises(queue.Empty):
                 lines.get(timeout=.7)
-            m.publish('handroid_tv/living-room/notify/normal', 'New')
+            m.publish('android_tv/living-room/notify/normal', 'New')
             assert lines.get(timeout=5)['message'] == 'New'
 
 
 def test_two_tvs_are_isolated(broker):
     with monitor(broker) as m, tv(broker, 'first') as (_, a), tv(broker, 'second') as (_, b):
-        m.publish('handroid_tv/first/notify/normal', 'First only')
+        m.publish('android_tv/first/notify/normal', 'First only')
         assert a.get(timeout=5)['message'] == 'First only'
         with pytest.raises(queue.Empty):
             b.get(timeout=.4)
-        m.publish('handroid_tv/second/notify/normal', 'Second only')
+        m.publish('android_tv/second/notify/normal', 'Second only')
         assert b.get(timeout=5)['message'] == 'Second only'
 
 
@@ -204,12 +206,12 @@ def test_last_will_marks_connection_offline(broker):
 
 def test_oversize_and_invalid_commands_do_not_break_following_messages(broker):
     with monitor(broker) as m, tv(broker) as (_, lines):
-        m.publish('handroid_tv/living-room/notify/normal', 'x'*5000)
+        m.publish('android_tv/living-room/notify/normal', 'x'*5000)
         with pytest.raises(queue.Empty):
             lines.get(timeout=.4)
-        m.publish('handroid_tv/living-room/notify/set', 'invalid JSON')
+        m.publish('android_tv/living-room/notify/set', 'invalid JSON')
         assert lines.get(timeout=5) == {'invalid': True}
-        m.publish('handroid_tv/living-room/notify/normal', 'Still connected')
+        m.publish('android_tv/living-room/notify/normal', 'Still connected')
         assert lines.get(timeout=5)['message'] == 'Still connected'
 
 
@@ -217,7 +219,7 @@ def test_reconnect_announces_again_without_replaying_offline_notifications(broke
     with tv(broker) as (_, lines):
         broker.restart()
         with monitor(broker) as m:
-            m.publish('handroid_tv/living-room/notify/normal', 'Do not replay', qos=1)
+            m.publish('android_tv/living-room/notify/normal', 'Do not replay', qos=1)
             assert lines.get(timeout=8) == {'connected': True}
-            m.publish('handroid_tv/living-room/notify/normal', 'After reconnect')
+            m.publish('android_tv/living-room/notify/normal', 'After reconnect')
             assert lines.get(timeout=5)['message'] == 'After reconnect'

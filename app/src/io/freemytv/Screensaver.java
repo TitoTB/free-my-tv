@@ -23,13 +23,13 @@ public class Screensaver extends DreamService {
 
     @Override public void onDreamingStarted() {
         super.onDreamingStarted();
-        HandroidService.state(this,HandroidService.DREAM,true);
+        AndroidService.state(this,AndroidService.DREAM,true);
         if (view != null) view.start();
     }
 
     @Override public void onDreamingStopped() {
         if (view != null) view.stop();
-        HandroidService.state(this,HandroidService.DREAM,false);
+        AndroidService.state(this,AndroidService.DREAM,false);
         super.onDreamingStopped();
     }
 

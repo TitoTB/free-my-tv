@@ -1026,7 +1026,7 @@ public class SettingsActivity extends Activity {
                 screen = REMOTE_KEYS;
                 focus = 0;
             } else if(focus==5) {
-                activity.startActivity(new Intent(activity,HandroidSettingsActivity.class));
+                activity.startActivity(new Intent(activity,AndroidSettingsActivity.class));
             } else {
                 activity.startActivity(new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             }

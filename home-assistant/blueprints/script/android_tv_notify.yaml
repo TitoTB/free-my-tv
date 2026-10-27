@@ -51,7 +51,7 @@ sequence:
   - variables:
       tv: !input tv_device
       identifiers: "{{ device_attr(tv, 'identifiers') or [] }}"
-      tv_identifiers: "{{ identifiers | map(attribute=1) | select('match', '^handroid_tv_') | list }}"
+      tv_identifiers: "{{ identifiers | map(attribute=1) | select('match', '^android_tv_') | list }}"
       notify_entities: "{{ device_entities(tv) | select('match', '^notify\\.') | list }}"
   - if:
       - condition: template
@@ -81,7 +81,7 @@ sequence:
         notification_id: "{{ notification_id | default('', true) or ('ha_' ~ now().strftime('%Y%m%d%H%M%S%f')) }}"
   - action: mqtt.publish
     data:
-      topic: "{{ 'handroid_tv/' ~ tv_identifiers[0][12:] ~ '/notify/set' }}"
+      topic: "{{ 'android_tv/' ~ tv_identifiers[0][11:] ~ '/notify/set' }}"
       qos: 0
       retain: false
       payload: >-

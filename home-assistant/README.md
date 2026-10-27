@@ -4,10 +4,6 @@ La TV se registra con MQTT Discovery en la integración **MQTT** de Home Assista
 predeterminado y el origen de Discovery son **Android TV**. Puedes elegir otro nombre para cada televisor.
 No se instala una integración personalizada, HACS ni un servidor HTTP/WebSocket en la TV.
 
-Los nombres internos `handroid_tv`, `handroid_` y las clases `Handroid*` se conservan por compatibilidad:
-son identificadores técnicos, no el nombre visible. Cambiarlos crearía entidades o dispositivos nuevos
-y rompería las automatizaciones existentes.
-
 ## Configuración
 
 1. Configura MQTT en Home Assistant y utiliza ese mismo broker desde la TV. Utiliza la dirección LAN de tu broker; `broker.example.test:1883` es solo un ejemplo.
@@ -44,8 +40,8 @@ pulsando OK, sin botón adicional.
 
 ## Avisos completos con selector de dispositivo
 
-Opcionalmente copia [la plantilla](blueprints/script/handroid_tv_notify.yaml) a
-`/config/blueprints/script/handroid_tv/notify.yaml`. Recarga las plantillas y crea un script a partir de
+Opcionalmente copia [la plantilla](blueprints/script/android_tv_notify.yaml) a
+`/config/blueprints/script/android_tv/notify.yaml`. Recarga las plantillas y crea un script a partir de
 **Android TV · Notificación**. Elige el dispositivo una vez y asigna un nombre al script, por ejemplo
 `script.aviso_tv_salon`. No requiere reiniciar Home Assistant para cargar un componente Python.
 
@@ -72,7 +68,7 @@ un evento, la entrega queda desconocida; no se reintenta automáticamente.
 
 ## Protocolo público
 
-Prefijo de cada TV: `handroid_tv/<UUID>` (el UUID aparece en Ajustes → Android TV).
+Prefijo de cada TV: `android_tv/<UUID>` (el UUID aparece en Ajustes → Android TV).
 
 | Topic | Contenido | Retain |
 | --- | --- | --- |
@@ -102,7 +98,7 @@ replays retenidos se ignoran al suscribirse: **no publiques avisos con retain ac
 hacerlo. Discovery y estados sí se conservan para reconstruir el dispositivo al reconectar o reiniciar HA.
 
 Si utilizas ACL, el usuario de la TV necesita leer su `notify/+` y `homeassistant/status`, y publicar su prefijo y
-`homeassistant/{binary_sensor,sensor,notify,event}/handroid_<UUID>/+/config`. Limita los accesos a cada TV si procede.
+`homeassistant/{binary_sensor,sensor,notify,event}/android_<UUID>/+/config`. Limita los accesos a cada TV si procede.
 
 ## Validación del código
 

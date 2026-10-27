@@ -41,7 +41,7 @@ public class HomeActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
-        HandroidService.state(this,HandroidService.HOME,true);
+        AndroidService.state(this,AndroidService.HOME,true);
         TrailerReturn.clear(this);
         if (prefsVersion != Prefs.version) {
             prefsVersion = Prefs.version;
@@ -63,7 +63,7 @@ public class HomeActivity extends Activity {
     }
 
     @Override protected void onPause() {
-        HandroidService.state(this,HandroidService.HOME,false);
+        AndroidService.state(this,AndroidService.HOME,false);
         if (home != null) home.pause();
         super.onPause();
     }

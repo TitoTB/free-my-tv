@@ -5,7 +5,7 @@ import java.util.*;
 import java.text.Normalizer;
 
 /** Native HA MQTT entities share one stable device, independently of its name or IP. */
-final class HandroidDiscovery {
+final class AndroidDiscovery {
     static JSONObject object(Object... fields) {
         JSONObject json=new JSONObject();
         try { for(int i=0;i<fields.length;i+=2) json.put((String)fields[i],fields[i+1]); }
@@ -13,15 +13,15 @@ final class HandroidDiscovery {
         return json;
     }
     static Map<String,String> configs(String id,String name,String manufacturer,String model,String version) {
-        Map<String,String> result=new LinkedHashMap<>(); String base="handroid_tv/"+id;
-        JSONObject device=object("identifiers",new JSONArray().put("handroid_tv_"+id),"name",name,
+        Map<String,String> result=new LinkedHashMap<>(); String base="android_tv/"+id;
+        JSONObject device=object("identifiers",new JSONArray().put("android_tv_"+id),"name",name,
             "manufacturer",manufacturer,"model",model,"sw_version",version);
         for(String key:new String[]{"connection","screen_on","home_visible","screensaver_active","overlay_permission","pending_notifications","active_notification","normal","critical","notification"}) {
             String platform=key.equals("normal")||key.equals("critical")?"notify":key.equals("notification")?"event":key.endsWith("notifications")||key.equals("active_notification")?"sensor":"binary_sensor";
             String label=key.equals("normal")?"Notificación normal":key.equals("critical")?"Notificación crítica":
                 key.equals("connection")?"Conexión":key.equals("screen_on")?"Pantalla":key.equals("home_visible")?"Inicio visible":key.equals("screensaver_active")?"Salvapantallas":
                 key.equals("overlay_permission")?"Permiso de avisos":key.equals("pending_notifications")?"Avisos pendientes":key.equals("active_notification")?"Aviso activo":"Estado de los avisos";
-            JSONObject config=object("name",label,"unique_id","handroid_"+id+"_"+key,"device",device,
+            JSONObject config=object("name",label,"unique_id","android_"+id+"_"+key,"device",device,
                 "availability_topic",base+"/availability","origin",object("name","Android TV","sw_version",version));
             if(platform.equals("notify")) {
                 try {
@@ -47,7 +47,7 @@ final class HandroidDiscovery {
                     if(key.equals("overlay_permission")) config.put("entity_category","diagnostic");
                 } catch(JSONException e) { throw new IllegalArgumentException(e); }
             }
-            result.put("homeassistant/"+platform+"/handroid_"+id+"/"+key+"/config",config.toString());
+            result.put("homeassistant/"+platform+"/android_"+id+"/"+key+"/config",config.toString());
         }
         return result;
     }

@@ -10,14 +10,14 @@ import android.os.SystemClock;
 import android.widget.*;
 
 /** System overlay: critical cards receive focus directly; normal persistent notices have an acknowledgement button. */
-final class HandroidBanner {
+final class AndroidBanner {
     private final Context context;
     private final WindowManager windows;
     private final Runnable acknowledge;
     private LinearLayout view;
     private Runnable motion;
-    HandroidBanner(Context context,Runnable acknowledge) { this.context=context; this.acknowledge=acknowledge; windows=context.getSystemService(WindowManager.class); }
-    void show(HandroidNotice notice) {
+    AndroidBanner(Context context,Runnable acknowledge) { this.context=context; this.acknowledge=acknowledge; windows=context.getSystemService(WindowManager.class); }
+    void show(AndroidNotice notice) {
         hideImmediately();
         float k=context.getResources().getDisplayMetrics().widthPixels/1920f;
         LinearLayout root=new LinearLayout(context); view=root;
@@ -26,7 +26,7 @@ final class HandroidBanner {
         GradientDrawable background=new GradientDrawable(GradientDrawable.Orientation.TL_BR,
             notice.critical()?new int[]{0xF2C83248,0xF270142F}:new int[]{0xF22AA8E8,0xF215438B});
         background.setCornerRadius(26*k); root.setBackground(background); root.setElevation(18*k);
-        ImageView icon=new ImageView(context); icon.setImageResource(R.drawable.handroid_icon);
+        ImageView icon=new ImageView(context); icon.setImageResource(R.drawable.android_icon);
         icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
         icon.setColorFilter(Color.WHITE,android.graphics.PorterDuff.Mode.SRC_IN);
         LinearLayout.LayoutParams iconParams=new LinearLayout.LayoutParams(Math.round(48*k),Math.round(48*k)); iconParams.rightMargin=Math.round(22*k); root.addView(icon,iconParams);
