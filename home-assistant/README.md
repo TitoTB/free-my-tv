@@ -104,20 +104,10 @@ hacerlo. Discovery y estados sí se conservan para reconstruir el dispositivo al
 Si utilizas ACL, el usuario de la TV necesita leer su `notify/+` y `homeassistant/status`, y publicar su prefijo y
 `homeassistant/{binary_sensor,sensor,notify,event}/handroid_<UUID>/+/config`. Limita los accesos a cada TV si procede.
 
-## Retirar el componente antiguo
-
-Solo si instalaste el antiguo prototipo de integración personalizada, retira la entrada de ese prototipo
-después de validar MQTT. Conserva el dispositivo y la integración MQTT actuales.
-Si copiaste los archivos del prototipo, retira únicamente `/config/custom_components/handroid_tv` y reinicia HA
-cuando te convenga. No borres otras integraciones. Las automatizaciones antiguas `handroid_tv.notify` deben pasar
-al script anterior o a `notify.send_message`; la acción antigua deja de existir al retirar el componente.
-
-Nada de esto se ha borrado automáticamente en tu instalación real de Home Assistant.
-
 ## Validación del código
 
 Eclipse Paho Java 1.2.5 está incluido y fijado por SHA256 en `app/libs` (licencia EDL en assets). No requiere Gradle.
 El empaquetado también incluye nls/*.properties y META-INF/services de Paho, necesarios en Android; dos tests
 comprueban la APK real y que las fuentes/rutas se conservan. Las pruebas usan un broker AMQTT temporal en localhost y el transporte Java real: dos TVs, retención, sesiones
 limpias, eventos, último testamento y reconexión tras reiniciar el broker. Los tests de política cubren prioridad,
-persistencia, cola y descarte al apagar. La prueba visual instalada está completada; no se ha repetido el apagado físico ni la confirmación manual con OK de la nueva tarjeta crítica.
+persistencia, cola y descarte al apagar.
