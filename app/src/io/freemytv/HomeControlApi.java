@@ -11,7 +11,7 @@ final class HomeControlApi {
     private String temperatureUnit;
     HomeControlApi(String base,String token) { this.base=base.trim().replaceAll("/+$",""); this.token=token.trim(); }
     HomeControlState read(int index) throws Exception {
-        if(index<0 || index>=HomeControlState.ENTITIES.length || HomeControlState.ENTITIES[index].isEmpty()) throw new IOException("Entity not configured");
+        if(index<0 || index>=HomeControlState.ENTITIES.length || (HomeControlState.ENTITIES[index].isEmpty() || HomeControlState.ENTITIES[index].contains("XXXXX"))) throw new IOException("Entity not configured");
         JSONObject json=new JSONObject(request("/api/states/"+HomeControlState.ENTITIES[index],null));
         JSONObject attributes=json.optJSONObject("attributes");
         if(index==1 && attributes!=null && attributes.opt("temperature") instanceof Number && attributes.optString("temperature_unit").isEmpty()) {

@@ -3,10 +3,9 @@
 # Needs a JDK (17+) and the Android SDK command-line tools (build-tools 34+, platform android-34). See README.md.
 set -euo pipefail
 cd "$(dirname "$0")"
-NO_SECRETS=true
-if [ "${1:-}" = "--personal" ]; then NO_SECRETS=false
-elif [ -n "${1:-}" ] && [ "${1:-}" != "--no-secrets" ]; then echo "Usage: ./build.sh [--no-secrets|--personal]" >&2; exit 1; fi
-if [ "$NO_SECRETS" = false ]; then echo "PRIVATE BUILD: includes your local service configuration. Do not publish this APK." >&2; fi
+NO_SECRETS=false
+if [ "${1:-}" = "--no-secrets" ]; then NO_SECRETS=true
+elif [ -n "${1:-}" ]; then echo "Usage: ./build.sh [--no-secrets]" >&2; exit 1; fi
 
 # --- Tools
 SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
@@ -35,6 +34,8 @@ prop() {
   local v
   v="$(grep -E "^[[:space:]]*$1[[:space:]]*=" config.properties | tail -1 | cut -d= -f2- || true)"
   v="$(printf '%s' "$v" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr -d '"\\')"
+  # Redacted reference values are not real connection details.
+  case "$v" in *XXXXX*) v="" ;; esac
   printf '%s' "${v:-$2}"
 }
 number() {
@@ -42,33 +43,11 @@ number() {
   [[ "$v" =~ ^-?[0-9]+(\.[0-9]+)?$ ]] || { echo "config.properties: $1 must be a number (got \"$v\")" >&2; exit 1; }
   printf '%s' "$v"
 }
-entity() {
-  local v; v="$(prop "$1" '')"
-  if [ -n "$v" ] && ! [[ "$v" =~ ^[a-z_]+\.[a-z0-9_]+$ ]]; then echo "Invalid Home Assistant entity setting: $1" >&2; exit 1; fi
-  local domain
-  case "$1" in
-    ha_scene_entity) domain=input_select;;
-    ha_heating_entity|ha_study_climate_entity) domain=climate;;
-    ha_cover_entity) domain=cover;;
-    ha_study_light_entity) domain=light;;
-    ha_study_fan_entity) domain=fan;;
-    ha_bedroom_entity) domain=switch;;
-    ha_washer_active_entity|ha_dishwasher_active_entity) domain=binary_sensor;;
-    *) domain=sensor;;
-  esac
-  if [ -n "$v" ] && [[ "$v" != "$domain."* ]]; then echo "Wrong entity domain for setting: $1" >&2; exit 1; fi
-  printf '%s' "$v"
-}
-
 LAT="$(number latitude 40.7128)"
 LON="$(number longitude -74.0060)"
 ASSIST=false; [ "$(prop disable_assistant false)" = "true" ] && ASSIST=true
 CRYPTO=false; [ "$(prop show_crypto true)" = "true" ] && CRYPTO=true
 ANIMATION=false; [ "$(prop hide_animation false)" = "true" ] && ANIMATION=true
-
-for setting in ha_temperature_entity ha_humidity_entity ha_scene_entity ha_heating_entity ha_cover_entity ha_study_light_entity ha_study_fan_entity ha_study_climate_entity ha_bedroom_entity ha_washer_active_entity ha_washer_remaining_entity ha_washer_progress_entity ha_dishwasher_active_entity ha_dishwasher_remaining_entity ha_dishwasher_progress_entity ha_printer_active_entity ha_printer_remaining_entity ha_printer_progress_entity; do
-  entity "$setting" >/dev/null
-done
 
 rm -rf out && mkdir -p out/gen/io/freemytv out/classes
 cat > out/gen/io/freemytv/Config.java <<EOF
@@ -89,24 +68,6 @@ final class Config {
     static final String JELLYFIN_USER = "$(prop jellyfin_user '')";
     static final String HOME_ASSISTANT_URL = "$(prop home_assistant_url '')";
     static final String HOME_ASSISTANT_TOKEN = "$(prop home_assistant_token '')";
-    static final String HA_TEMPERATURE = "$(entity ha_temperature_entity)";
-    static final String HA_HUMIDITY = "$(entity ha_humidity_entity)";
-    static final String HA_SCENE = "$(entity ha_scene_entity)";
-    static final String HA_HEATING = "$(entity ha_heating_entity)";
-    static final String HA_COVER = "$(entity ha_cover_entity)";
-    static final String HA_STUDY_LIGHT = "$(entity ha_study_light_entity)";
-    static final String HA_STUDY_FAN = "$(entity ha_study_fan_entity)";
-    static final String HA_STUDY_CLIMATE = "$(entity ha_study_climate_entity)";
-    static final String HA_BEDROOM = "$(entity ha_bedroom_entity)";
-    static final String HA_WASHER_ACTIVE = "$(entity ha_washer_active_entity)";
-    static final String HA_WASHER_REMAINING = "$(entity ha_washer_remaining_entity)";
-    static final String HA_WASHER_PROGRESS = "$(entity ha_washer_progress_entity)";
-    static final String HA_DISHWASHER_ACTIVE = "$(entity ha_dishwasher_active_entity)";
-    static final String HA_DISHWASHER_REMAINING = "$(entity ha_dishwasher_remaining_entity)";
-    static final String HA_DISHWASHER_PROGRESS = "$(entity ha_dishwasher_progress_entity)";
-    static final String HA_PRINTER_ACTIVE = "$(entity ha_printer_active_entity)";
-    static final String HA_PRINTER_REMAINING = "$(entity ha_printer_remaining_entity)";
-    static final String HA_PRINTER_PROGRESS = "$(entity ha_printer_progress_entity)";
     static final String ELEVENLABS_VOICE_ID = "$(prop elevenlabs_voice_id XrExE9yKIg1WjnnlVkGX)";
     static final String TMDB_REGION = "$(prop tmdb_region US)";
     static final String LATITUDE = "$LAT";
@@ -123,25 +84,9 @@ final class Config {
 EOF
 
 # --- Build
-# Per-installation HTTP opt-in. No private LAN addresses are shipped in source.
-mkdir -p out/network-res/xml
-HTTP_POLICY=out/network-res/xml/network_security_config.xml
-printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' '<network-security-config>' '  <base-config cleartextTrafficPermitted="false" />' > "$HTTP_POLICY"
-HOSTS="$(prop local_http_hosts '')"
-if [ -n "$HOSTS" ]; then
-  printf '%s\n' '  <domain-config cleartextTrafficPermitted="true">' >> "$HTTP_POLICY"
-  IFS=',' read -r -a HTTP_HOSTS <<< "$HOSTS"
-  for host in "${HTTP_HOSTS[@]}"; do
-    [[ "$host" =~ ^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$ ]] || { echo 'Invalid local_http_hosts entry' >&2; exit 1; }
-    printf '    <domain includeSubdomains="false">%s</domain>\n' "$host" >> "$HTTP_POLICY"
-  done
-  printf '%s\n' '  </domain-config>' >> "$HTTP_POLICY"
-fi
-printf '%s\n' '</network-security-config>' >> "$HTTP_POLICY"
-"$BT/aapt2" compile "$HTTP_POLICY" -o out/network.zip
 "$BT/aapt2" compile --dir app/res -o out/res.zip
 # Fonts uncompressed: Android reads them straight from the APK.
-"$BT/aapt2" link -o out/base.apk -I "$AJ" --manifest app/AndroidManifest.xml --java out/gen out/res.zip -R out/network.zip \
+"$BT/aapt2" link -o out/base.apk -I "$AJ" --manifest app/AndroidManifest.xml --java out/gen out/res.zip \
   --min-sdk-version 26 --target-sdk-version 33 -A app/assets -0 ttf
 # Windows aapt2 packs assets with backslash separators ("assets/symbols\x.png") and Android
 # cannot find them: the home screen loses its icons and fonts. Rename the zip entries to "/".

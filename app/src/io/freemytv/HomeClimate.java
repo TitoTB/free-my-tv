@@ -13,7 +13,7 @@ import java.util.concurrent.*;
 
 /** Read-only indoor sensors. Poll only while Home or the screensaver is visible; never log credentials or bodies. */
 final class HomeClimate {
-    static final String TEMPERATURE=Config.HA_TEMPERATURE,HUMIDITY=Config.HA_HUMIDITY;
+    static final String TEMPERATURE="sensor.XXXXX_temperatura",HUMIDITY="sensor.XXXXX_humedad";
     private static final long INTERVAL=30_000;
     private static HomeClimate instance;
     static synchronized HomeClimate get() { if(instance==null) instance=new HomeClimate(); return instance; }
@@ -53,7 +53,7 @@ final class HomeClimate {
         });
     }
     private String read(String entity) {
-        if(entity==null || entity.isEmpty()) return "—";
+        if(entity==null || entity.isEmpty() || entity.contains("XXXXX")) return "—";
         HttpURLConnection connection=null;
         try {
             URL url=new URL(Config.HOME_ASSISTANT_URL.trim().replaceAll("/+$","")+"/api/states/"+entity);

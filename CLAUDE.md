@@ -1,6 +1,6 @@
-# Community checkout instructions
+# Reference fork instructions
 
-Read COMMUNITY.md first. This is a generic source fork; never copy a maintainer's local configuration, APK, signing key, private notes, screenshots or device backups here. Do not publish personal builds. Default Android builds ignore config.properties; --personal explicitly creates a sensitive APK. Entity mappings are build-time inputs and default empty. The inherited base guide below describes the original project and may differ from this branch. Do not build or install a new version unless the user requests it.
+Read README.md and COMMUNITY.md first. This repository is a redacted example of one Android TV customization, meant to be adapted with an AI agent, not a configurable product. XXXXX marks fictional secrets, servers, entity IDs and calendar names. The .invalid hosts are deliberately non-existent. Help the user adapt config.properties (ignored by Git) and the clearly marked Java/XML examples; do not add configuration frameworks or setup screens unless requested. Treat these examples as disconnected until replaced. Never copy the maintainer's private settings, APK, signing key, local journal, screenshots or backups. Do not build/install a version unless explicitly requested. The inherited base guide below may differ from this reference.
 
 # Free My TV: notes for Claude
 

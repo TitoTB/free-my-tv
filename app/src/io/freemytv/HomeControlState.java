@@ -7,7 +7,7 @@ import java.util.Locale;
 
 /** The three living-room controls; no Android dependencies, credentials or optimistic device state. */
 final class HomeControlState {
-    static final String[] ENTITIES={Config.HA_SCENE,Config.HA_HEATING,Config.HA_COVER};
+    static final String[] ENTITIES={"input_select.XXXXX_escenas","climate.XXXXX_calefaccion","cover.XXXXX_persianas"};
     static final String[] TITLES={"Escena","Calefacción","Persianas"};
     final boolean available, controllable, on;
     final String value;

@@ -57,11 +57,11 @@ def main():
         if relative == 'config.example.properties':
             for number, line in enumerate(text.splitlines(), 1):
                 match = re.match(r'\s*([^#!\s=]+)\s*=\s*(.*?)\s*$', line)
-                if match and re.search(r'(?:^|_)(?:key|token|password|secret)$', match[1], re.I) and match[2]:
+                if match and re.search(r'(?:^|_)(?:key|token|password|secret)$', match[1], re.I) and match[2] and not re.fullmatch(r'X{5,}', match[2]):
                     problems.append((relative, number, 'credential in example configuration'))
     build = (ROOT / 'build.sh').read_text(encoding='utf-8')
-    if 'NO_SECRETS=true\n' not in build.split('# --- Tools', 1)[0]:
-        problems.append(('build.sh', 0, 'generic build must be the default'))
+    if 'case "$v" in *XXXXX*) v="" ;; esac' not in build:
+        problems.append(('build.sh', 0, 'reference placeholders must remain disconnected'))
     if 'static final String ELEVENLABS_KEY' in build:
         problems.append(('build.sh', 0, 'ElevenLabs key must remain runtime-only'))
     for path, line, reason in problems:

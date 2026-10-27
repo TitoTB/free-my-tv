@@ -1,20 +1,24 @@
-# Free My TV · Community fork
+# Free My TV · Mi personalización
 
-Personalización para Android TV / Google TV basada en [simbasjungles/free-my-tv](https://github.com/simbasjungles/free-my-tv).
+Ejemplo de personalización de **Android TV / Google TV** basado en [simbasjungles/free-my-tv](https://github.com/simbasjungles/free-my-tv).
 
-Home con estante minimalista, cartelera, Jellyfin, agenda cultural de Madrid, pizarra de experiencias, controles/calendarios de Home Assistant, notificaciones MQTT y asistente Jarvis.
+Comparto el diseño y las funciones de mi launcher para que puedas tomarlos como referencia y adaptarlos con un agente de IA, como hice yo. Las claves, servidores, entidades y nombres particulares están sustituidos por **`XXXXX`** o direcciones ficticias `.invalid`.
 
-**[Funciones, configuración, privacidad y créditos](COMMUNITY.md)**
+Incluye estante minimalista, cartelera, Jellyfin, agenda cultural de Madrid, pizarra de experiencias, controles/calendarios de Home Assistant, notificaciones MQTT, salvapantallas y Jarvis.
 
-Esta rama contiene código y recursos genéricos. No incluye la configuración personal del mantenedor ni sus APK, credenciales o certificados de firma. Las conexiones son opcionales y cada usuario aporta sus propios datos.
+## Cómo utilizar este ejemplo
 
-- `./build.sh`: configuración genérica sin credenciales incorporadas.
-- `./build.sh --personal`: compilación privada con tu propio `config.properties`; ese APK no se debe compartir.
-- MQTT y la clave de ElevenLabs se configuran después de instalar, desde la TV.
-- Las entidades de Home Assistant se seleccionan actualmente mediante los campos `ha_*_entity` de la configuración local. No hay aún un configurador completo de todas las integraciones desde la TV.
+1. Clona el repositorio y ábrelo con tu agente de IA.
+2. Pídele que revise los marcadores `XXXXX` y adapte el ejemplo a tu TV y servicios.
+3. Guarda tus credenciales en `config.properties`, que está excluido de Git. Las entidades y los calendarios se adaptan directamente en el código; [aquí están los archivos](COMMUNITY.md).
+4. Cuando lo hayas adaptado, el agente puede compilarlo con `./build.sh` e instalarlo en tu TV, si se lo pides.
 
-Las mejoras de esta rama se aplican a Android. Las implementaciones webOS/Tizen heredadas no incluyen automáticamente estas incorporaciones. No se ha publicado un APK comunitario de esta rama.
+Puedes empezar con este mensaje:
 
-Fondos del salvapantallas: **Skyline**, de **[Basic Apple Guy](https://basicappleguy.com/)**, [colección original](https://basicappleguy.com/basicappleblog/skyline). Se conserva su atribución y los derechos de su autor.
+> Quiero adaptar este ejemplo a mi TV: https://github.com/TitoTB/free-my-tv. Lee README.md y COMMUNITY.md, revisa los marcadores XXXXX y dime qué datos necesitas para sustituirlos por los de mi instalación. Las credenciales deben quedarse en archivos locales. No compiles ni instales hasta que te lo pida.
 
-Código derivado bajo [MIT](LICENSE). Se mantienen los avisos del proyecto original y las licencias propias de los recursos y bibliotecas de terceros.
+Este repositorio es una referencia editable. No se prepara un APK comunitario ni se añade un configurador universal. Los marcadores que aún no se hayan sustituido no se utilizan para conectar ni controlar dispositivos. Un APK que compiles con tus claves debe permanecer privado.
+
+Fondos **Skyline**, de **[Basic Apple Guy](https://basicappleguy.com/)**: [colección original](https://basicappleguy.com/basicappleblog/skyline).
+
+[Archivos que adaptar, privacidad y créditos](COMMUNITY.md) · [Documentación original](README.upstream.md) · [Licencia MIT del código](LICENSE)

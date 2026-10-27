@@ -4,9 +4,9 @@ import org.json.JSONObject;
 
 /** Explicit entity allowlist for the study's all-off control. Unknown never means off. */
 final class StudyState {
-    static final String[] ENTITIES={Config.HA_STUDY_LIGHT,Config.HA_STUDY_FAN,Config.HA_STUDY_CLIMATE};
+    static final String[] ENTITIES={"light.XXXXX_estudio","fan.XXXXX_estudio","climate.XXXXX_estudio"};
     static final String[] NAMES={"Luz","Ventilador","Aire acondicionado"};
-    static final String BEDROOM=Config.HA_BEDROOM;
+    static final String BEDROOM="switch.XXXXX_dormitorio";
     static final class Member {
         final boolean available,on,canOff;
         Member(boolean available,boolean on,boolean canOff) { this.available=available; this.on=on; this.canOff=canOff; }

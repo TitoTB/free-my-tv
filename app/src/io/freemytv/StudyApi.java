@@ -14,7 +14,7 @@ final class StudyApi {
     StudyState read() {
         StudyState.Member[] members=new StudyState.Member[bedroom?1:3];
         for(int i=0;i<members.length;i++) try {
-            if(entity(i).isEmpty()) { members[i]=StudyState.missing(); continue; }
+            if(entity(i).isEmpty() || entity(i).contains("XXXXX")) { members[i]=StudyState.missing(); continue; }
             JSONObject json=new JSONObject(api.request("/api/states/"+entity(i),null));
             members[i]=bedroom?StudyState.parseBedroom(json):StudyState.parse(i,json);
         } catch(Exception ignored) { members[i]=StudyState.missing(); }

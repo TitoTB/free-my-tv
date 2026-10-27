@@ -46,8 +46,8 @@ final class AssistConversation {
         if(language==null||!language.startsWith("es"))return null;
         String n=Normalizer.normalize(text,Normalizer.Form.NFD).replaceAll("\\p{M}","").toLowerCase(Locale.ROOT)
                 .replaceAll("[^a-z0-9 ]"," ").replaceAll("\\s+"," ").trim();
-        if(n.equals("que temperatura hay en casa")||n.equals("cual es la temperatura de casa"))return Config.HA_TEMPERATURE.isEmpty()?null:Config.HA_TEMPERATURE;
-        if(n.equals("que humedad hay en casa")||n.equals("cual es la humedad de casa"))return Config.HA_HUMIDITY.isEmpty()?null:Config.HA_HUMIDITY;
+        if(n.equals("que temperatura hay en casa")||n.equals("cual es la temperatura de casa"))return HomeClimate.TEMPERATURE.contains("XXXXX")?null:HomeClimate.TEMPERATURE;
+        if(n.equals("que humedad hay en casa")||n.equals("cual es la humedad de casa"))return HomeClimate.HUMIDITY.contains("XXXXX")?null:HomeClimate.HUMIDITY;
         return null;
     }
     static Reply parse(JSONObject json)throws IOException {

@@ -9,7 +9,7 @@ final class ApplianceApi {
     private final Reader reader;
     ApplianceApi(Reader reader){this.reader=reader;}
     private JSONObject read(String id,BooleanSupplier active) {
-        if(id==null || id.isEmpty() || !active.getAsBoolean())return null;
+        if(id==null || id.isEmpty() || id.contains("XXXXX") || !active.getAsBoolean())return null;
         try{return new JSONObject(reader.get(id));}catch(Exception ignored){return null;}
     }
     ApplianceState read(int index,BooleanSupplier active) {

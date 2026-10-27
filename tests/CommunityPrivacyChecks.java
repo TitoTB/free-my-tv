@@ -5,7 +5,7 @@ import java.net.InetSocketAddress;
 import java.util.concurrent.atomic.AtomicInteger;
 import com.sun.net.httpserver.HttpServer;
 
-/** Run against empty generic Config. No real server, account or household devices. */
+/** Fictional XXXXX bindings must stay disconnected. No real accounts or household devices. */
 public final class CommunityPrivacyChecks {
     private static int checks;
     private static void check(boolean condition){if(!condition)throw new AssertionError("Community check "+checks);checks++;}
@@ -17,6 +17,8 @@ public final class CommunityPrivacyChecks {
         try{
             check(Config.HOME_ASSISTANT_TOKEN.isEmpty());check(Config.JELLYFIN_KEY.isEmpty());check(Config.JELLYSEERR_KEY.isEmpty());
             check(Config.TMDB_KEY.isEmpty());check(Config.FANART_KEY.isEmpty());check(Config.EXPERIENCE_PHOTO_ALBUM.isEmpty());
+            check(HomeClimate.TEMPERATURE.contains("XXXXX"));check(HomeClimate.HUMIDITY.contains("XXXXX"));
+            for(String entity:HomeControlState.ENTITIES)check(entity.contains("XXXXX"));
             HomeControlApi api=new HomeControlApi("http://127.0.0.1:"+server.getAddress().getPort(),"fake-token");
             for(int i=0;i<3;i++){
                 boolean rejected=false;try{api.read(i);}catch(IOException expected){rejected=true;}check(rejected);
@@ -31,6 +33,7 @@ public final class CommunityPrivacyChecks {
             check(ExperienceData.defaults().items.isEmpty());
             check(CalendarAgenda.panelName("calendar.example","My calendar").equals("My calendar"));
             check(CalendarAgenda.fixedColor("calendar.example")==0);
+            check(CalendarAgenda.panelName("calendar.XXXXX_personal","Example").equals("XXXXX"));
             check(calls.get()==0);
         } finally {server.stop(0);}
         System.out.println("CommunityPrivacyChecks: "+checks+" passed");

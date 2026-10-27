@@ -5,9 +5,9 @@ import org.json.JSONObject;
 /** Informational cycle cards; entity identities are checked before using values. */
 final class ApplianceState {
     static final String[] KEYS={"washer","dishwasher","printer3d"},TITLES={"Lavadora","Lavavajillas","Impresora 3D"};
-    static final String[] ACTIVE={Config.HA_WASHER_ACTIVE,Config.HA_DISHWASHER_ACTIVE,Config.HA_PRINTER_ACTIVE};
-    static final String[] REMAINING={Config.HA_WASHER_REMAINING,Config.HA_DISHWASHER_REMAINING,Config.HA_PRINTER_REMAINING};
-    static final String[] PROGRESS={Config.HA_WASHER_PROGRESS,Config.HA_DISHWASHER_PROGRESS,Config.HA_PRINTER_PROGRESS};
+    static final String[] ACTIVE={"binary_sensor.XXXXX_lavadora","binary_sensor.XXXXX_lavavajillas","sensor.XXXXX_impresora_estado"};
+    static final String[] REMAINING={"sensor.XXXXX_lavadora_tiempo","sensor.XXXXX_lavavajillas_tiempo","sensor.XXXXX_impresora_fin"};
+    static final String[] PROGRESS={"sensor.XXXXX_lavadora_progreso","sensor.XXXXX_lavavajillas_progreso","sensor.XXXXX_impresora_progreso"};
     final boolean active;
     final String remaining;
     final float progress;

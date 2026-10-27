@@ -83,8 +83,20 @@ final class CalendarAgenda {
         }
         return out.toString().replaceAll("[\\p{Cntrl}\\s]+"," ").trim();
     }
-    static String panelName(String id,String name) { return name; }
-    static int fixedColor(String id) { return 0; }
+    // XXXXX marks fictional calendar IDs/names; replace these examples for your own installation.
+    static String panelName(String id,String name) {
+        return "calendar.XXXXX_personal".equals(id)?"XXXXX":name;
+    }
+    static int fixedColor(String id) {
+        switch(id) {
+            case "calendar.XXXXX_trabajo": return 0xFF4CAF50;
+            case "calendar.XXXXX_personal": return 0xFF2196F3;
+            case "calendar.XXXXX_familia": return 0xFFF44336;
+            case "calendar.XXXXX_proyectos": return 0xFF9C27B0;
+            case "calendar.XXXXX_citas": return 0xFFFF9800;
+            default: return 0;
+        }
+    }
     static ZonedDateTime date(JSONObject value,ZoneId zone) {
         String date=value.optString("date");
         if(!date.isEmpty()) return LocalDate.parse(date).atStartOfDay(zone);
